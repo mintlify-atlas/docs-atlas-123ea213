@@ -1,0 +1,353 @@
+---
+title: 'Benchmarking & Profiling'
+description: 'Profile inference performance and optimize for your hardware'
+icon: 'gauge'
+---
+
+## Overview
+
+`profile_inference.py` is a comprehensive profiling and benchmarking tool for ACE-Step 1.5. It measures end-to-end wall time, LLM planning time, DiT diffusion time, VAE decoding time, and more across different devices, backends, and configurations.
+
+## Quick Start
+
+```bash
+# Basic profile (text2music, default settings)
+python profile_inference.py
+
+# Profile with LLM thinking enabled
+python profile_inference.py --thinking
+
+# Run benchmark matrix
+python profile_inference.py --mode benchmark
+
+# Profile on Apple Silicon
+python profile_inference.py --device mps --lm-backend mlx
+
+# Profile with cProfile function-level analysis
+python profile_inference.py --detailed
+```
+
+## Profiling Modes
+
+### Profile Mode (Single Run)
+
+Runs a single generation with detailed timing breakdown. Includes optional warmup and cProfile.
+
+```bash
+python profile_inference.py --mode profile
+```
+
+**What it measures:**
+- Total wall time (end-to-end)
+- LLM planning time (token generation, constrained decoding, CFG overhead)
+- DiT diffusion time (per-step and total)
+- VAE decode time
+- Audio save time
+
+**Key options:**
+
+| Flag | Description |
+|------|-------------|
+| `--no-warmup` | Skip warmup run (includes compilation overhead) |
+| `--detailed` | Enable `cProfile` function-level analysis |
+| `--llm-debug` | Deep LLM debugging (token count, throughput) |
+| `--thinking` | Enable LLM Chain-of-Thought reasoning |
+| `--duration <sec>` | Override audio duration |
+| `--batch-size <n>` | Override batch size |
+| `--inference-steps <n>` | Override diffusion steps |
+
+### Benchmark Mode (Configuration Matrix)
+
+Runs a matrix of configurations and produces a summary table. Automatically adapts to GPU memory limits.
+
+```bash
+python profile_inference.py --mode benchmark
+```
+
+**Default matrix:**
+- Durations: 30s, 60s, 120s, 240s (clamped by GPU)
+- Batch sizes: 1, 2, 4 (clamped by GPU)
+- Thinking: True, False
+- Inference steps: 8, 16
+
+**Example output:**
+
+```
+Duration   Batch   Think   Steps   Wall(s)    LM(s)      DiT(s)     VAE(s)     Status
+------------------------------------------------------------------------------------------
+30         1       False   8       3.21       0.45       1.89       0.52       OK
+30         1       True    8       5.67       2.91       1.89       0.52       OK
+60         2       False   16      12.34      0.48       9.12       1.85       OK
+```
+
+**Save results to JSON:**
+
+```bash
+python profile_inference.py --mode benchmark --benchmark-output results.json
+```
+
+### Understand Mode (Audio Understanding)
+
+Profiles the `understand_music()` API which extracts metadata (BPM, key, time signature, caption) from audio codes.
+
+```bash
+python profile_inference.py --mode understand
+python profile_inference.py --mode understand --audio-codes "<|audio_code_123|>..."
+```
+
+### Create Sample Mode (Inspiration)
+
+Profiles the `create_sample()` API which generates a complete song blueprint from a text query.
+
+```bash
+python profile_inference.py --mode create_sample
+python profile_inference.py --mode create_sample --sample-query "a soft Bengali love song"
+python profile_inference.py --mode create_sample --instrumental
+```
+
+### Format Sample Mode (Metadata)
+
+Profiles the `format_sample()` API which converts caption + lyrics into structured metadata.
+
+```bash
+python profile_inference.py --mode format_sample
+```
+
+## Device & Backend Selection
+
+### Supported Devices
+
+| Device | Flag | Notes |
+|--------|------|-------|
+| CUDA (NVIDIA) | `--device cuda` | Auto-detected, recommended |
+| MPS (Apple Silicon) | `--device mps` | macOS M-series chips |
+| CPU | `--device cpu` | Slow, testing only |
+| Auto | `--device auto` | Selects best available (default) |
+
+### Supported LLM Backends
+
+| Backend | Flag | Notes |
+|---------|------|-------|
+| vLLM | `--lm-backend vllm` | Fastest on NVIDIA |
+| PyTorch | `--lm-backend pt` | Universal fallback |
+| MLX | `--lm-backend mlx` | Optimized for Apple Silicon |
+| Auto | `--lm-backend auto` | Selects best backend (default) |
+
+### Examples
+
+```bash
+# NVIDIA GPU
+python profile_inference.py --device cuda --lm-backend vllm
+
+# Apple Silicon
+python profile_inference.py --device mps --lm-backend mlx
+
+# CPU baseline
+python profile_inference.py --device cpu --lm-backend pt
+```
+
+## Understanding Output
+
+### Time Costs Breakdown
+
+```
+PROFILING RESULTS
+================================================================================
+COMPONENT                                          TIME (s)     % of wall
+--------------------------------------------------------------------------------
+
+LLM (5Hz Language Model)                           2.91         45.2%
+  phase1_time                                      1.20         18.6%
+  phase2_time                                      1.71         26.6%
+
+DiT (Diffusion Transformer)                        1.89         29.4%
+  diffusion_time_cost                              1.37         21.3%
+  vae_decode_time_cost                             0.52          8.1%
+
+Pipeline: pipeline_total_time                      6.43        100.0%
+
+Overhead (I/O, audio save, etc.)                   0.99         15.4%
+
+TOTAL WALL TIME                                    6.43        100.0%
+```
+
+### Performance Insights
+
+The tool automatically identifies bottlenecks:
+
+**LLM bottleneck:**
+```
+LLM is the bottleneck: 2.9s (45% of total)
+Suggestions:
+  1. Run with --llm-debug for token-level throughput analysis
+  2. Try --no-constrained-decoding to reduce FSM overhead
+  3. Compare backends: --lm-backend vllm vs pt vs mlx
+  4. Reduce lm_cfg_scale (currently doubles forward passes if > 1.0)
+```
+
+**DiT bottleneck:**
+```
+DiT is the bottleneck: 9.1s (75% of total)
+Suggestions:
+  1. Reduce --inference-steps (turbo model supports 4-8)
+  2. Reduce --duration
+  3. Try --quantization int8_weight_only
+```
+
+## CLI Reference
+
+### Device & Backend
+
+```bash
+--device auto|cuda|mps|cpu          # Device selection (default: auto)
+--lm-backend auto|vllm|pt|mlx       # LLM backend (default: auto)
+```
+
+### Model Paths
+
+```bash
+--config-path acestep-v15-turbo     # DiT model config
+--lm-model acestep-5Hz-lm-1.7B      # LLM model path
+```
+
+### Hardware Options
+
+```bash
+--offload-to-cpu                    # Offload models to CPU when idle
+--offload-dit-to-cpu                # Offload DiT to CPU when idle
+--quantization int8_weight_only     # Quantization mode
+```
+
+### Generation Parameters
+
+```bash
+--duration 60                       # Audio duration (seconds)
+--batch-size 2                      # Batch size
+--inference-steps 8                 # Diffusion steps
+--seed 42                           # Random seed
+--guidance-scale 7.0                # CFG guidance scale
+```
+
+### LLM / CoT Parameters
+
+```bash
+--thinking                          # Enable LLM reasoning
+--use-cot-metas                     # LLM generates metadata
+--use-cot-caption                   # LLM rewrites caption
+--use-cot-language                  # LLM detects language
+--use-constrained-decoding          # FSM-based decoding (default)
+--no-constrained-decoding           # Disable constrained decoding
+--lm-temperature 0.85               # LLM sampling temperature
+--lm-cfg-scale 2.0                  # LLM CFG scale
+```
+
+### Profiling Options
+
+```bash
+--mode profile                      # Single run profiling (default)
+--mode benchmark                    # Configuration matrix
+--mode understand                   # Profile understand_music()
+--mode create_sample                # Profile create_sample()
+--mode format_sample                # Profile format_sample()
+--no-warmup                         # Skip warmup run
+--detailed                          # Enable cProfile analysis
+--llm-debug                         # Deep LLM debugging
+--benchmark-output results.json     # Save results to JSON
+```
+
+## Optimization Examples
+
+### Compare LLM Models
+
+```bash
+# Lightweight (0.6B)
+python profile_inference.py --lm-model acestep-5Hz-lm-0.6B --thinking
+
+# Default (1.7B)
+python profile_inference.py --lm-model acestep-5Hz-lm-1.7B --thinking
+
+# Large (4B)
+python profile_inference.py --lm-model acestep-5Hz-lm-4B --thinking
+```
+
+### Thinking vs No-Thinking
+
+```bash
+# Without thinking (faster)
+python profile_inference.py --mode benchmark
+
+# With thinking (better quality, slower)
+python profile_inference.py --thinking --use-cot-metas --use-cot-caption
+```
+
+### Low-VRAM Profiling
+
+```bash
+# Offload + quantization
+python profile_inference.py \
+  --offload-to-cpu \
+  --quantization int8_weight_only \
+  --lm-model acestep-5Hz-lm-0.6B
+```
+
+### Full Benchmark Suite
+
+```bash
+# Run full benchmark and save results
+python profile_inference.py \
+  --mode benchmark \
+  --benchmark-output benchmark_results.json
+
+# Inspect results
+cat benchmark_results.json | python -m json.tool
+```
+
+### Function-Level Profiling
+
+```bash
+# Enable cProfile for detailed analysis
+python profile_inference.py --detailed --llm-debug
+```
+
+## Tips & Best Practices
+
+1. **Always include warmup** (default) — The first run includes JIT compilation and memory allocation overhead. Warmup ensures measurements reflect steady-state performance.
+
+2. **Use `--benchmark-output`** to save results as JSON for later analysis or comparison across hardware.
+
+3. **Compare with thinking off vs on** — Thinking mode significantly increases LLM time but may improve generation quality.
+
+4. **Test with representative durations** — Short durations (30s) are dominated by LLM time; long durations (240s+) are dominated by DiT time.
+
+5. **GPU memory auto-adaptation** — Benchmark mode automatically clamps durations and batch sizes based on detected GPU tier.
+
+6. **Use `--detailed` sparingly** — `cProfile` adds overhead; use it only when investigating function-level bottlenecks.
+
+## Hardware Comparisons
+
+### Example Results
+
+**NVIDIA RTX 4090 (24GB):**
+```
+Duration: 60s, Batch: 2, Thinking: True, Steps: 8
+Wall time: 8.2s | LM: 2.1s | DiT: 5.4s | VAE: 0.5s
+```
+
+**Apple M2 Max (32GB):**
+```
+Duration: 60s, Batch: 2, Thinking: True, Steps: 8
+Wall time: 12.5s | LM: 4.2s | DiT: 7.1s | VAE: 0.8s
+```
+
+**NVIDIA RTX 3060 (12GB):**
+```
+Duration: 60s, Batch: 1, Thinking: True, Steps: 8
+Wall time: 11.3s | LM: 3.5s | DiT: 6.8s | VAE: 0.7s
+```
+
+## Related Resources
+
+- [Generation Parameters](/advanced/generation-parameters) — Parameter reference
+- [LLM Configuration](/advanced/llm-configuration) — LM tuning guide
+- [GPU Compatibility](/concepts/gpu-compatibility) — VRAM requirements
+- [Troubleshooting](/advanced/troubleshooting) — Performance issues

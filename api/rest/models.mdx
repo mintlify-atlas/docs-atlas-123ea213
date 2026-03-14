@@ -1,0 +1,635 @@
+---
+title: Request/Response Models
+description: Data schemas and models for ACE-Step 1.5 REST API
+---
+
+## GenerateMusicRequest
+
+Complete request schema for `POST /release_task` endpoint (~/workspace/source/acestep/api/http/release_task_models.py:12).
+
+### Core Parameters
+
+<ResponseField name="prompt" type="string" default="">
+  Text prompt describing the music (local/per-track description for lego tasks)
+</ResponseField>
+
+<ResponseField name="global_caption" type="string" default="">
+  Global song description for SFT-stems lego tasks (full song context)
+</ResponseField>
+
+<ResponseField name="lyrics" type="string" default="">
+  Lyric text for vocal generation
+</ResponseField>
+
+<ResponseField name="thinking" type="boolean" default={false}>
+  Use 5Hz LM to generate audio codes (lm-dit behavior). When `true`, enables enhanced quality with LM-generated semantic codes. When `false`, uses pure DiT text2music mode.
+</ResponseField>
+
+<ResponseField name="sample_mode" type="boolean" default={false}>
+  Auto-generate caption/lyrics/metadata via LM from `sample_query` (no user prompt required)
+</ResponseField>
+
+<ResponseField name="sample_query" type="string" default="">
+  Natural language description for sample mode (e.g., "a soft Bengali love song for a quiet evening")
+</ResponseField>
+
+<ResponseField name="use_format" type="boolean" default={false}>
+  Use `format_sample()` to enhance input caption/lyrics via LM
+</ResponseField>
+
+<ResponseField name="model" type="string | null" default={null}>
+  Model name to use (e.g., "acestep-v15-turbo", "acestep-v15-turbo-shift3"). If not specified, uses default model.
+</ResponseField>
+
+### Metadata Parameters
+
+<ResponseField name="bpm" type="integer | null" default={null}>
+  Tempo in BPM (30-300). Auto-filled by LM if missing and `thinking=true`.
+</ResponseField>
+
+<ResponseField name="key_scale" type="string" default="">
+  Musical key/scale (e.g., "C Major", "Am"). Aliases: `keyscale`, `keyScale`
+</ResponseField>
+
+<ResponseField name="time_signature" type="string" default="">
+  Time signature: "2" (2/4), "3" (3/4), "4" (4/4), "6" (6/8). Aliases: `timesignature`, `timeSignature`
+</ResponseField>
+
+<ResponseField name="vocal_language" type="string" default="en">
+  Lyrics language: en, zh, ja, etc.
+</ResponseField>
+
+<ResponseField name="audio_duration" type="number | null" default={null}>
+  Generation duration in seconds (10-600). Aliases: `duration`, `target_duration`
+</ResponseField>
+
+### Generation Control
+
+<ResponseField name="inference_steps" type="integer" default={8}>
+  Number of inference steps. Turbo models: 1-20 (recommended 8). Base models: 1-200 (recommended 32-64).
+</ResponseField>
+
+<ResponseField name="guidance_scale" type="number" default={7.0}>
+  Prompt guidance coefficient. Only effective for base models.
+</ResponseField>
+
+<ResponseField name="use_random_seed" type="boolean" default={true}>
+  Whether to use random seed for each generation
+</ResponseField>
+
+<ResponseField name="seed" type="integer | string" default={-1}>
+  Specify seed for reproducibility (when use_random_seed=false)
+</ResponseField>
+
+<ResponseField name="batch_size" type="integer | null" default={null}>
+  Batch generation count (max 8)
+</ResponseField>
+
+### Advanced DiT Parameters
+
+<ResponseField name="shift" type="number" default={3.0}>
+  Timestep shift factor (range 1.0-5.0). Only effective for base models, not turbo models.
+</ResponseField>
+
+<ResponseField name="timesteps" type="string | null" default={null}>
+  Custom timesteps as comma-separated values (e.g., "0.97,0.76,0.615,0.5,0.395,0.28,0.18,0.085,0"). Overrides `inference_steps` and `shift`.
+</ResponseField>
+
+<ResponseField name="infer_method" type="string" default="ode">
+  Diffusion inference method: `ode` (Euler, faster) or `sde` (stochastic)
+</ResponseField>
+
+<ResponseField name="use_adg" type="boolean" default={false}>
+  Use Adaptive Dual Guidance (base model only)
+</ResponseField>
+
+<ResponseField name="cfg_interval_start" type="number" default={0.0}>
+  CFG application start ratio (0.0-1.0)
+</ResponseField>
+
+<ResponseField name="cfg_interval_end" type="number" default={1.0}>
+  CFG application end ratio (0.0-1.0)
+</ResponseField>
+
+### Audio Processing
+
+<ResponseField name="audio_format" type="string" default="mp3">
+  Output audio format. Supported: `flac`, `mp3`, `opus`, `aac`, `wav`, `wav32`
+</ResponseField>
+
+<ResponseField name="use_tiled_decode" type="boolean" default={true}>
+  Use tiled decoding for memory efficiency
+</ResponseField>
+
+### Edit/Reference Audio
+
+<ResponseField name="reference_audio_path" type="string | null" default={null}>
+  Reference audio file path on server (for style transfer)
+</ResponseField>
+
+<ResponseField name="src_audio_path" type="string | null" default={null}>
+  Source audio file path on server (for cover/repaint tasks)
+</ResponseField>
+
+<ResponseField name="task_type" type="string" default="text2music">
+  Task type: `text2music`, `cover`, `repaint`, `lego`, `extract`, `complete`
+</ResponseField>
+
+<ResponseField name="instruction" type="string" default="DEFAULT_DIT_INSTRUCTION">
+  Edit instruction (auto-generated based on task_type if not provided)
+</ResponseField>
+
+<ResponseField name="repainting_start" type="number" default={0.0}>
+  Repainting start time in seconds
+</ResponseField>
+
+<ResponseField name="repainting_end" type="number | null" default={null}>
+  Repainting end time in seconds (-1 for end of audio)
+</ResponseField>
+
+<ResponseField name="audio_cover_strength" type="number" default={1.0}>
+  Cover strength (0.0-1.0). Lower values (0.2) for style transfer.
+</ResponseField>
+
+<ResponseField name="cover_noise_strength" type="number" default={0.0}>
+  Cover noise blending strength (0.0=pure noise, 1.0=closest to source audio)
+</ResponseField>
+
+### LM Parameters
+
+<ResponseField name="audio_code_string" type="string" default="">
+  User-provided audio semantic codes string (5Hz). When non-empty, skips LM code generation. Alias: `audioCodeString`
+</ResponseField>
+
+<ResponseField name="lm_model_path" type="string | null" default={null}>
+  5Hz LM checkpoint dir name (e.g., "acestep-5Hz-lm-0.6B")
+</ResponseField>
+
+<ResponseField name="lm_backend" type="string" default="vllm">
+  LM backend: `vllm`, `pt`, or `mlx`
+</ResponseField>
+
+<ResponseField name="lm_temperature" type="number" default={0.85}>
+  LM sampling temperature
+</ResponseField>
+
+<ResponseField name="lm_cfg_scale" type="number" default={2.5}>
+  LM CFG scale (>1 enables CFG)
+</ResponseField>
+
+<ResponseField name="lm_top_k" type="integer | null" default={null}>
+  LM top-k sampling (0/null disables)
+</ResponseField>
+
+<ResponseField name="lm_top_p" type="number | null" default={0.9}>
+  LM top-p nucleus sampling (>=1 disables)
+</ResponseField>
+
+<ResponseField name="lm_repetition_penalty" type="number" default={1.0}>
+  LM repetition penalty
+</ResponseField>
+
+<ResponseField name="lm_negative_prompt" type="string" default="NO USER INPUT">
+  Negative prompt used by LM CFG
+</ResponseField>
+
+### LM Chain-of-Thought (CoT)
+
+<ResponseField name="use_cot_caption" type="boolean" default={true}>
+  Let LM rewrite/enhance input caption via CoT reasoning. Aliases: `cot_caption`, `cot-caption`
+</ResponseField>
+
+<ResponseField name="use_cot_language" type="boolean" default={true}>
+  Let LM detect vocal language via CoT. Aliases: `cot_language`, `cot-language`
+</ResponseField>
+
+<ResponseField name="constrained_decoding" type="boolean" default={true}>
+  Enable FSM-based constrained decoding for structured LM output. Aliases: `constrainedDecoding`, `constrained`
+</ResponseField>
+
+<ResponseField name="constrained_decoding_debug" type="boolean" default={false}>
+  Enable debug logging for constrained decoding
+</ResponseField>
+
+<ResponseField name="allow_lm_batch" type="boolean" default={true}>
+  Allow LM batch processing for efficiency
+</ResponseField>
+
+### Advanced Features
+
+<ResponseField name="chunk_mask_mode" type="string" default="auto">
+  Chunk mask mode: `explicit` or `auto`
+</ResponseField>
+
+<ResponseField name="analysis_only" type="boolean" default={false}>
+  Only perform audio analysis, skip generation
+</ResponseField>
+
+<ResponseField name="full_analysis_only" type="boolean" default={false}>
+  Perform full audio analysis only
+</ResponseField>
+
+<ResponseField name="is_format_caption" type="boolean" default={false}>
+  Internal flag for caption formatting
+</ResponseField>
+
+<ResponseField name="track_name" type="string | null" default={null}>
+  Track name for lego tasks
+</ResponseField>
+
+<ResponseField name="track_classes" type="string[] | null" default={null}>
+  Track classes for lego tasks
+</ResponseField>
+
+---
+
+## Response Models
+
+### Standard Response Envelope
+
+All endpoints return this wrapper format:
+
+```typescript
+{
+  data: any,                // Actual response data
+  code: number,            // HTTP status code (200=success)
+  error: string | null,    // Error message (null on success)
+  timestamp: number,       // Response timestamp (milliseconds)
+  extra: any | null        // Extra metadata (usually null)
+}
+```
+
+### Task Creation Response
+
+Response from `POST /release_task`:
+
+<ResponseField name="task_id" type="string">
+  Unique task identifier (UUID format)
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Initial status: "queued"
+</ResponseField>
+
+<ResponseField name="queue_position" type="integer">
+  Position in queue (1-based)
+</ResponseField>
+
+**Example**:
+```json
+{
+  "data": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "queue_position": 1
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000,
+  "extra": null
+}
+```
+
+### Task Query Response
+
+Response from `POST /query_result`:
+
+<ResponseField name="task_id" type="string">
+  Task identifier
+</ResponseField>
+
+<ResponseField name="status" type="integer">
+  Task status code: 0 (queued/running), 1 (succeeded), 2 (failed)
+</ResponseField>
+
+<ResponseField name="result" type="string">
+  JSON string containing result array (parse to access data)
+</ResponseField>
+
+**Parsed Result Array Item**:
+
+<ResponseField name="file" type="string">
+  Audio file URL path (relative, for use with `/v1/audio` endpoint)
+</ResponseField>
+
+<ResponseField name="wave" type="string">
+  Waveform data (usually empty)
+</ResponseField>
+
+<ResponseField name="status" type="integer">
+  Generation status: 0 (in progress), 1 (success), 2 (failed)
+</ResponseField>
+
+<ResponseField name="create_time" type="integer">
+  Task creation timestamp (Unix seconds)
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment identifier
+</ResponseField>
+
+<ResponseField name="prompt" type="string">
+  Prompt/caption used for generation
+</ResponseField>
+
+<ResponseField name="lyrics" type="string">
+  Lyrics used for generation
+</ResponseField>
+
+<ResponseField name="metas" type="object">
+  Metadata object:
+  - `bpm` (integer): Tempo
+  - `duration` (number): Duration in seconds
+  - `genres` (string): Genre tags
+  - `keyscale` (string): Key/scale
+  - `timesignature` (string): Time signature
+</ResponseField>
+
+<ResponseField name="generation_info" type="string">
+  Human-readable generation summary
+</ResponseField>
+
+<ResponseField name="seed_value" type="string">
+  Comma-separated seed values used for generation
+</ResponseField>
+
+<ResponseField name="lm_model" type="string">
+  LM model name used (e.g., "acestep-5Hz-lm-0.6B")
+</ResponseField>
+
+<ResponseField name="dit_model" type="string">
+  DiT model name used (e.g., "acestep-v15-turbo")
+</ResponseField>
+
+---
+
+## Task Status Codes
+
+| Status Code | Status Name | Description |
+|-------------|-------------|-------------|
+| `0` | queued/running | Task is queued or in progress |
+| `1` | succeeded | Generation succeeded, result is ready |
+| `2` | failed | Generation failed with error |
+
+---
+
+## HTTP Status Codes
+
+| Code | Meaning | Description |
+|------|---------|-------------|
+| `200` | OK | Request succeeded |
+| `400` | Bad Request | Invalid request (bad JSON, missing fields) |
+| `401` | Unauthorized | Missing or invalid API key |
+| `404` | Not Found | Resource not found |
+| `415` | Unsupported Media Type | Unsupported Content-Type header |
+| `429` | Too Many Requests | Server busy (queue is full) |
+| `500` | Internal Server Error | Internal server error |
+| `503` | Service Unavailable | LLM not initialized (set ACESTEP_INIT_LLM=true) |
+
+---
+
+## Error Response Format
+
+When an error occurs, the API returns:
+
+```json
+{
+  "detail": "Error message describing the issue"
+}
+```
+
+Or using the standard envelope:
+
+```json
+{
+  "data": null,
+  "code": 500,
+  "error": "Detailed error message",
+  "timestamp": 1700000000000,
+  "extra": null
+}
+```
+
+---
+
+## Environment Variables
+
+### Server Configuration
+
+<ResponseField name="ACESTEP_API_HOST" type="string" default="127.0.0.1">
+  Server bind host
+</ResponseField>
+
+<ResponseField name="ACESTEP_API_PORT" type="integer" default={8001}>
+  Server bind port
+</ResponseField>
+
+<ResponseField name="ACESTEP_API_KEY" type="string" default="">
+  API authentication key (empty disables auth)
+</ResponseField>
+
+<ResponseField name="ACESTEP_API_WORKERS" type="integer" default={1}>
+  API worker thread count (MUST be 1 for in-memory queue)
+</ResponseField>
+
+### Model Configuration
+
+<ResponseField name="ACESTEP_CONFIG_PATH" type="string" default="acestep-v15-turbo">
+  Primary DiT model path/name
+</ResponseField>
+
+<ResponseField name="ACESTEP_CONFIG_PATH2" type="string" default="">
+  Secondary DiT model path (optional)
+</ResponseField>
+
+<ResponseField name="ACESTEP_CONFIG_PATH3" type="string" default="">
+  Third DiT model path (optional)
+</ResponseField>
+
+<ResponseField name="ACESTEP_DEVICE" type="string" default="auto">
+  Device for model loading (auto, cuda, mps, cpu)
+</ResponseField>
+
+<ResponseField name="ACESTEP_USE_FLASH_ATTENTION" type="boolean" default={true}>
+  Enable flash attention for faster inference
+</ResponseField>
+
+<ResponseField name="ACESTEP_OFFLOAD_TO_CPU" type="boolean" default={false}>
+  Offload models to CPU when idle (for VRAM management)
+</ResponseField>
+
+<ResponseField name="ACESTEP_OFFLOAD_DIT_TO_CPU" type="boolean" default={false}>
+  Offload DiT specifically to CPU
+</ResponseField>
+
+### LM Configuration
+
+<ResponseField name="ACESTEP_INIT_LLM" type="string" default="auto">
+  Whether to initialize LM at startup (auto determines based on GPU)
+</ResponseField>
+
+<ResponseField name="ACESTEP_LM_MODEL_PATH" type="string" default="acestep-5Hz-lm-0.6B">
+  Default 5Hz LM model path/name
+</ResponseField>
+
+<ResponseField name="ACESTEP_LM_BACKEND" type="string" default="vllm">
+  LM backend: vllm, pt, or mlx
+</ResponseField>
+
+<ResponseField name="ACESTEP_LM_DEVICE" type="string" default="(same as ACESTEP_DEVICE)">
+  Device for LM (inherits ACESTEP_DEVICE if not set)
+</ResponseField>
+
+<ResponseField name="ACESTEP_LM_OFFLOAD_TO_CPU" type="boolean" default={false}>
+  Offload LM to CPU when idle
+</ResponseField>
+
+### Queue Configuration
+
+<ResponseField name="ACESTEP_QUEUE_MAXSIZE" type="integer" default={200}>
+  Maximum queue size (429 error when full)
+</ResponseField>
+
+<ResponseField name="ACESTEP_QUEUE_WORKERS" type="integer" default={1}>
+  Number of queue workers (single GPU recommended)
+</ResponseField>
+
+<ResponseField name="ACESTEP_AVG_JOB_SECONDS" type="number" default={5.0}>
+  Initial average job duration estimate
+</ResponseField>
+
+<ResponseField name="ACESTEP_AVG_WINDOW" type="integer" default={50}>
+  Window size for averaging job duration
+</ResponseField>
+
+### Cache Configuration
+
+<ResponseField name="ACESTEP_TMPDIR" type="string" default=".cache/acestep/tmp">
+  Temporary file directory for generated audio
+</ResponseField>
+
+<ResponseField name="TRITON_CACHE_DIR" type="string" default=".cache/acestep/triton">
+  Triton kernel cache directory
+</ResponseField>
+
+<ResponseField name="TORCHINDUCTOR_CACHE_DIR" type="string" default=".cache/acestep/torchinductor">
+  TorchInductor cache directory
+</ResponseField>
+
+---
+
+## Parameter Naming Conventions
+
+The API supports multiple naming conventions for flexibility:
+
+### Snake_case / camelCase Aliases
+
+- `audio_duration` / `duration` / `audioDuration`
+- `key_scale` / `keyscale` / `keyScale`
+- `time_signature` / `timesignature` / `timeSignature`
+- `sample_query` / `sampleQuery` / `description` / `desc`
+- `use_format` / `useFormat` / `format`
+- `audio_code_string` / `audioCodeString`
+- `use_cot_caption` / `cot_caption` / `cot-caption`
+- `use_cot_language` / `cot_language` / `cot-language`
+- `constrained_decoding` / `constrainedDecoding` / `constrained`
+
+### Metadata Object
+
+Metadata can be passed in a nested object using any of these field names:
+- `metas`
+- `metadata`
+- `user_metadata`
+
+---
+
+## Content-Type Support
+
+Most endpoints support multiple content types:
+
+### JSON (application/json)
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "upbeat pop", "thinking": true}'
+```
+
+### Form URL-Encoded (application/x-www-form-urlencoded)
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "prompt=upbeat pop&thinking=true"
+```
+
+### Multipart Form-Data (multipart/form-data)
+
+For file uploads:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -F "prompt=remix this" \
+  -F "src_audio=@/path/to/song.mp3" \
+  -F "task_type=repaint"
+```
+
+---
+
+## Best Practices
+
+### 1. Use `thinking=true` for Best Quality
+
+Enable LM-enhanced generation for better results:
+
+```json
+{
+  "prompt": "cinematic orchestral music",
+  "thinking": true,
+  "lm_temperature": 0.85,
+  "lm_cfg_scale": 2.5
+}
+```
+
+### 2. Use `sample_query` for Quick Generation
+
+Generate from natural language descriptions:
+
+```json
+{
+  "sample_query": "a soft Bengali love song for a quiet evening",
+  "thinking": true
+}
+```
+
+### 3. Batch Query Multiple Tasks
+
+Query multiple tasks in a single request:
+
+```json
+{
+  "task_id_list": [
+    "task-id-1",
+    "task-id-2",
+    "task-id-3"
+  ]
+}
+```
+
+### 4. Check Server Stats Before Submitting
+
+Monitor queue status to avoid 429 errors:
+
+```python
+stats = requests.get("http://localhost:8001/v1/stats").json()["data"]
+if stats["queue_size"] < stats["queue_maxsize"] * 0.8:
+    # Queue has capacity
+    submit_task()
+```
+
+### 5. Enable Authentication in Production
+
+```bash
+export ACESTEP_API_KEY=your-secret-key-here
+python -m acestep.api_server
+```

@@ -1,0 +1,662 @@
+---
+title: GPU Compatibility
+description: VRAM requirements, platform support, and automatic optimization for ACE-Step 1.5
+---
+
+## Overview
+
+ACE-Step 1.5 automatically adapts to your GPU's available VRAM, adjusting generation limits, model availability, offloading strategies, and quantization settings. The system detects GPU memory at startup and configures optimal settings for your hardware.
+
+<Info>
+  ACE-Step supports NVIDIA (CUDA), AMD (ROCm), Intel (XPU), Apple Silicon (MPS/MLX), and CPU backends.
+</Info>
+
+## GPU Tier System
+
+ACE-Step organizes GPUs into tiers based on available VRAM and automatically configures each tier for optimal performance.
+
+### Tier Configuration Table
+
+| VRAM | Tier | LM Models Available | Recommended LM | Backend | Max Duration (LM/No LM) | Max Batch (LM/No LM) | Offload | Quantization |
+|------|------|---------------------|----------------|---------|-------------------------|----------------------|---------|---------------|
+| ≤4GB | Tier 1 | None | — | pt | 4min / 6min | 1 / 1 | CPU + DiT | INT8 |
+| 4-6GB | Tier 2 | None | — | pt | 8min / 10min | 1 / 1 | CPU + DiT | INT8 |
+| 6-8GB | Tier 3 | 0.6B | 0.6B | pt | 8min / 10min | 2 / 2 | CPU + DiT | INT8 |
+| 8-12GB | Tier 4 | 0.6B | 0.6B | vllm | 8min / 10min | 2 / 4 | CPU + DiT | INT8 |
+| 12-16GB | Tier 5 | 0.6B, 1.7B | 1.7B | vllm | 8min / 10min | 4 / 4 | CPU | INT8 |
+| 16-20GB | Tier 6a | 0.6B, 1.7B | 1.7B | vllm | 8min / 10min | 4 / 8 | CPU | INT8 |
+| 20-24GB | Tier 6b | 0.6B, 1.7B, 4B | 1.7B | vllm | 8min / 8min | 8 / 8 | None | None |
+| ≥24GB | Unlimited | All (0.6B, 1.7B, 4B) | 4B | vllm | 10min / 10min | 8 / 8 | None | None |
+
+### Understanding Tier Columns
+
+**LM Models Available:**
+- Which 5Hz Language Model sizes can be loaded at this tier
+- Smaller models = lower VRAM usage
+- Tier 1-2: LM disabled by default to preserve VRAM for DiT
+
+**Recommended LM:**
+- Default LM model auto-selected in the UI
+- Based on best quality/performance balance for the tier
+
+**Backend:**
+- `vllm`: High-performance backend with PagedAttention (NVIDIA/AMD GPUs ≥8GB)
+- `pt`: PyTorch fallback, universal compatibility, lower VRAM
+- `mlx`: Native Apple Silicon acceleration (Mac only)
+
+**Max Duration:**
+- Two values: with LM enabled / without LM
+- Longer duration requires more VRAM for sequence processing
+- Automatically clamped if you request more
+
+**Max Batch Size:**
+- Maximum simultaneous generations
+- Two values: with LM enabled / without LM
+- Higher batch = better utilization of fast inference
+
+**Offload Strategy:**
+- `CPU + DiT`: All models offload to CPU when idle; DiT offloads between steps
+- `CPU`: VAE and Text Encoder offload to CPU; DiT stays on GPU
+- `None`: All models remain on GPU (fastest)
+
+**Quantization:**
+- `INT8`: 8-bit weight quantization reduces VRAM ~40%
+- `None`: Full precision (FP16/BF16)
+- Minimal quality impact when enabled
+
+## Platform Support
+
+### NVIDIA GPUs (CUDA)
+
+**Recommended Platform** - Best performance and full feature support.
+
+**Requirements:**
+- CUDA 11.8 or later
+- NVIDIA driver 520+ (Linux) or 528+ (Windows)
+- Compute capability 7.0+ (RTX 20-series, GTX 1660+, Tesla V100+)
+
+**Supported Features:**
+- ✅ All DiT models (Turbo, SFT, Base)
+- ✅ All LM models (0.6B, 1.7B, 4B)
+- ✅ vLLM backend (≥8GB VRAM)
+- ✅ Flash Attention 2 (auto-detected)
+- ✅ INT8 quantization via torch.compile
+- ✅ Multi-stream inference
+
+**Tested GPUs:**
+- RTX 4090 (24GB): Tier Unlimited
+- RTX 4080 (16GB): Tier 6a
+- RTX 3090 (24GB): Tier Unlimited
+- RTX 3080 (10GB): Tier 4
+- RTX 3070 (8GB): Tier 4
+- RTX 3060 (12GB): Tier 5
+- RTX 3060 Ti (8GB): Tier 4
+- GTX 1660 Ti (6GB): Tier 3
+- Tesla V100 (16GB/32GB): Tier 6a/Unlimited
+- Tesla T4 (16GB): Tier 6a
+
+### AMD GPUs (ROCm)
+
+**Requirements:**
+- ROCm 6.0 or later
+- AMD driver AMDGPU
+- Supported cards: RX 6000/7000 series, Radeon Pro, MI series
+
+**Windows-Specific:**
+- Python 3.12 required (AMD provides Python 3.12 wheels only)
+- ROCm 6.2+ recommended
+
+**Supported Features:**
+- ✅ All DiT models
+- ✅ All LM models
+- ✅ vLLM backend (experimental, ≥8GB)
+- ⚠️ Flash Attention (limited support)
+- ✅ INT8 quantization
+
+**Tested GPUs:**
+- RX 7900 XTX (24GB): Tier Unlimited
+- RX 7900 XT (20GB): Tier 6b
+- RX 6900 XT (16GB): Tier 6a
+- RX 6800 (16GB): Tier 6a
+
+<Warning>
+  ROCm on Windows is less mature than Linux. Expect occasional compatibility issues. Use Linux for production workloads.
+</Warning>
+
+### Intel GPUs (XPU)
+
+**Requirements:**
+- Intel Data Center GPU or Arc A-series
+- Intel Extension for PyTorch (IPEX)
+- Windows or Linux
+
+**Supported Features:**
+- ✅ All DiT models
+- ✅ All LM models (PyTorch backend only)
+- ❌ vLLM backend (not supported)
+- ❌ Flash Attention (not available)
+- ⚠️ INT8 quantization (limited)
+
+**Tested GPUs:**
+- Arc A770 (16GB): Tier 6a
+- Arc A750 (8GB): Tier 4
+- Data Center GPU Max (48GB): Tier Unlimited
+
+<Info>
+  Intel GPU support is experimental. Performance may be lower than CUDA/ROCm. PyTorch backend is the only LM option.
+</Info>
+
+### Apple Silicon (MPS/MLX)
+
+**Requirements:**
+- M1, M2, or M3 series chip
+- macOS 13.0 or later
+- Unified memory architecture (shared RAM/VRAM)
+
+**Supported Features:**
+- ✅ All DiT models via MPS
+- ✅ All LM models via MLX (recommended) or PyTorch
+- ✅ Native Metal acceleration
+- ❌ Flash Attention (not available)
+- ❌ INT8 quantization (not needed, unified memory)
+- ❌ CPU offload (no benefit with unified memory)
+
+**MLX Backend:**
+- Native Apple Silicon acceleration for LM
+- Optimal memory usage
+- Recommended over PyTorch for Mac
+
+**Memory Tiers:**
+- 8GB unified (M1): Tier 3-4
+- 16GB unified (M1 Pro): Tier 5-6a
+- 32GB unified (M1 Max/M2 Pro): Tier 6b-Unlimited
+- 64GB+ unified (M1 Ultra/M2 Ultra): Tier Unlimited
+
+**Tested Macs:**
+- M3 Max (36GB): Tier Unlimited
+- M2 Max (32GB): Tier Unlimited
+- M2 Pro (16GB): Tier 6a
+- M1 Max (64GB): Tier Unlimited
+- M1 Pro (16GB): Tier 6a
+- M1 (16GB): Tier 5
+- M1 (8GB): Tier 3
+
+<Check>
+  Use `--backend mlx` to enable native Metal acceleration for LM on Apple Silicon.
+</Check>
+
+### CPU-Only Mode
+
+**Requirements:**
+- Python 3.11-3.12
+- 16GB+ system RAM recommended
+
+**Supported Features:**
+- ✅ All DiT models (very slow)
+- ✅ All LM models (PyTorch backend)
+- ❌ All GPU-specific optimizations
+
+**Performance:**
+- ~50-100x slower than GPU
+- Suitable for testing/development only
+- Not recommended for production
+
+<Warning>
+  CPU generation of a 30s song can take 5-10 minutes with Turbo model. SFT/Base models may take 30+ minutes.
+</Warning>
+
+## Adaptive UI Defaults
+
+The Gradio UI automatically configures itself based on detected GPU tier:
+
+### Auto-Configuration Behavior
+
+**LM Initialization Checkbox:**
+- ✅ Checked and enabled: Tier 3+ (6GB+)
+- ❌ Unchecked and disabled: Tier 1-2 (&lt;6GB)
+
+**LM Model Path Dropdown:**
+- Shows only compatible models for your tier
+- Pre-selects recommended model (e.g., 1.7B for Tier 5)
+- Grayed out options not available
+
+**Backend Dropdown:**
+- Tier 1-3: Only `pt` or `mlx` (Mac) available
+- Tier 4+: `pt`, `vllm`, and `mlx` (Mac) available
+- Default: `vllm` for NVIDIA/AMD ≥8GB, `mlx` for Mac, `pt` otherwise
+
+**CPU Offload Checkbox:**
+- ✅ Enabled by default: Tier 1-6a (&lt;20GB)
+- ❌ Disabled by default: Tier 6b+ (≥20GB)
+
+**DiT Offload Checkbox:**
+- ✅ Enabled by default: Tier 1-4 (&lt;12GB)
+- ❌ Disabled by default: Tier 5+ (≥12GB)
+- No effect on Mac (unified memory)
+
+**Quantization Checkbox:**
+- ✅ Enabled by default: Tier 1-6a (&lt;20GB)
+- ❌ Disabled by default: Tier 6b+ (≥20GB)
+- Requires `compile_model=True`
+
+**Compile Model Checkbox:**
+- ✅ Enabled by default: All tiers
+- Required for INT8 quantization
+- Provides 20-30% speedup after warmup
+
+**Duration Slider:**
+- Maximum: Tier-specific limit (with/without LM)
+- Values above limit are clamped with warning
+
+**Batch Size Slider:**
+- Maximum: Tier-specific limit (with/without LM)
+- Reduced automatically if VRAM insufficient
+
+<Info>
+  You can override auto-detected settings, but the system will warn if your configuration may cause out-of-memory errors.
+</Info>
+
+## Runtime Safety Features
+
+ACE-Step includes multiple safeguards to prevent crashes and optimize resource usage.
+
+### VRAM Guard
+
+Before each inference, the system:
+1. Estimates VRAM requirements based on:
+   - Model sizes (DiT, VAE, Text Encoder, LM)
+   - Sequence length (duration)
+   - Batch size
+   - Offloading configuration
+2. Checks available free VRAM
+3. Automatically reduces batch size if needed
+4. Warns user if generation may fail
+
+### Adaptive VAE Decode
+
+Three-tier fallback prevents out-of-memory during decoding:
+
+**Tier 1: GPU Tiled Decode**
+```python
+# Default: Process chunks on GPU
+chunk_size = auto_detected  # Based on free VRAM
+VAE on GPU → Decode in chunks → Concatenate
+```
+
+**Tier 2: GPU with CPU Offload**
+```python
+# Fallback if Tier 1 fails
+Offload other models to CPU → VAE on GPU → Decode → Restore
+```
+
+**Tier 3: Full CPU Decode**
+```python
+# Last resort if both fail
+Move VAE to CPU → Decode on CPU → Slower but guaranteed
+```
+
+### Auto Chunk Size
+
+VAE decode chunk size adapts to available VRAM:
+
+| Free VRAM | Chunk Size (frames @ 5Hz) | Equivalent Audio |
+|-----------|---------------------------|------------------|
+| ≥16GB | 1536 | 307 seconds |
+| 12-16GB | 1024 | 205 seconds |
+| 8-12GB | 512 | 102 seconds |
+| 4-8GB | 256 | 51 seconds |
+| &lt;4GB | 128 | 26 seconds |
+
+### Duration and Batch Clamping
+
+If you request values exceeding tier limits:
+```python
+Requested duration: 600s (10 min)
+Tier 5 limit with LM: 480s (8 min)
+→ Clamped to 480s with warning message
+
+Requested batch: 8
+Tier 5 limit with LM: 4
+→ Clamped to 4 with warning message
+```
+
+## Memory Optimization Guide
+
+### Very Low VRAM (≤6GB)
+
+**Configuration:**
+```bash
+# Tier 1-2: Minimal mode
+Model: acestep-v15-turbo
+LM: None (disabled)
+Quantization: INT8 (required)
+Offload: CPU + DiT (required)
+Batch size: 1
+Max duration: 4-6 min
+```
+
+**Tips:**
+- Use shortest duration needed
+- Avoid batch generation
+- Close all other GPU applications
+- Consider upgrading GPU for better experience
+
+### Low VRAM (6-8GB)
+
+**Configuration:**
+```bash
+# Tier 3: Light LM mode
+Model: acestep-v15-turbo
+LM: acestep-5Hz-lm-0.6B
+Backend: pt
+Quantization: INT8
+Offload: CPU + DiT
+Batch size: 2
+Max duration: 8-10 min
+```
+
+**Tips:**
+- 0.6B LM provides basic CoT reasoning
+- Keep offloading enabled
+- Use Cover/Repaint to skip LM when possible
+
+### Medium VRAM (8-16GB)
+
+**Configuration:**
+```bash
+# Tier 4-5: Balanced mode
+Model: acestep-v15-turbo
+LM: acestep-5Hz-lm-0.6B (8-12GB) or 1.7B (12-16GB)
+Backend: vllm
+Quantization: INT8
+Offload: CPU + DiT (8-12GB) or CPU only (12-16GB)
+Batch size: 2-4
+Max duration: 8-10 min
+```
+
+**Tips:**
+- Use vLLM backend for faster LM inference
+- 1.7B LM recommended for 12GB+ (best balance)
+- Batch size 2-4 enables good exploration
+
+### High VRAM (16-24GB)
+
+**Configuration:**
+```bash
+# Tier 6a-6b: Performance mode
+Model: acestep-v15-turbo
+LM: acestep-5Hz-lm-1.7B (16-20GB) or 4B (20-24GB)
+Backend: vllm
+Quantization: INT8 (16-20GB) or None (20-24GB)
+Offload: CPU (16-20GB) or None (20-24GB)
+Batch size: 4-8
+Max duration: 8-10 min
+```
+
+**Tips:**
+- 4B LM provides best quality (20GB+)
+- Disable offloading on 20GB+ for speed
+- Disable quantization on 20GB+ for max quality
+- Batch size 8 for efficient exploration
+
+### Very High VRAM (≥24GB)
+
+**Configuration:**
+```bash
+# Tier Unlimited: Maximum performance
+Model: acestep-v15-turbo (or sft for quality)
+LM: acestep-5Hz-lm-4B
+Backend: vllm
+Quantization: None
+Offload: None
+Batch size: 8
+Max duration: 10 min
+```
+
+**Tips:**
+- All models fit comfortably
+- No optimization needed
+- Consider SFT model for even better quality
+- Use batch size 8 for maximum throughput
+
+## Simulating GPU Tiers (Debug Mode)
+
+For testing and development, simulate different VRAM sizes:
+
+```bash
+# Simulate 4GB GPU (Tier 1)
+MAX_CUDA_VRAM=4 uv run acestep
+
+# Simulate 8GB GPU (Tier 4)
+MAX_CUDA_VRAM=8 uv run acestep
+
+# Simulate 12GB GPU (Tier 5)
+MAX_CUDA_VRAM=12 uv run acestep
+
+# Simulate 24GB GPU (Unlimited)
+MAX_CUDA_VRAM=24 uv run acestep
+```
+
+The system enforces the memory cap via `torch.cuda.set_per_process_memory_fraction()`, making simulation realistic.
+
+### Automated Tier Testing
+
+```bash
+# Test all tiers automatically
+python profile_inference.py --mode tier-test
+
+# Test specific tiers
+python profile_inference.py --mode tier-test --tiers 6 8 12 16 24
+
+# Test with LM enabled
+python profile_inference.py --mode tier-test --tier-with-lm
+
+# Quick test (skip compile for non-quantized)
+python profile_inference.py --mode tier-test --tier-skip-compile
+```
+
+### Boundary Testing
+
+Find minimum tiers for INT8/offload disable:
+
+```bash
+# Run boundary tests
+python profile_inference.py --mode tier-test --tier-boundary
+
+# With LM enabled
+python profile_inference.py --mode tier-test --tier-boundary --tier-with-lm
+
+# Save results to JSON
+python profile_inference.py --mode tier-test --tier-boundary \
+  --benchmark-output boundary_results.json
+```
+
+Output shows minimum tier for each capability:
+```
+BOUNDARY ANALYSIS
+=================
+  Capability                          Min Tier   VRAM
+  -------------------------------------------------------
+  No INT8 Quantization                tier6b     20GB
+  No CPU Offload (all on GPU)         tier6b     20GB
+```
+
+### Batch Size Boundary Testing
+
+Find maximum safe batch size per tier:
+
+```bash
+# Test batch size limits
+python profile_inference.py --mode tier-test --tier-batch-boundary --tier-with-lm
+
+# Test specific tiers
+python profile_inference.py --mode tier-test --tier-batch-boundary \
+  --tier-with-lm --tiers 8 12 16 24
+```
+
+Tests batch sizes 1, 2, 4, 8 and reports maximum successful for each tier.
+
+<Check>
+  See the [Benchmark Guide](/advanced/benchmark) for complete profiling tool documentation.
+</Check>
+
+## Common GPU Issues
+
+<AccordionGroup>
+  <Accordion title="Out of Memory (OOM) errors" icon="memory">
+    **Symptoms:**
+    - `CUDA out of memory` or `RuntimeError: out of memory`
+    - Generation fails midway
+    
+    **Solutions:**
+    1. Reduce batch size (8 → 4 → 2 → 1)
+    2. Reduce duration to tier maximum
+    3. Enable CPU offload and DiT offload
+    4. Enable INT8 quantization
+    5. Use smaller LM model (4B → 1.7B → 0.6B → None)
+    6. Close other GPU applications
+    7. Restart Python to clear VRAM fragmentation
+  </Accordion>
+  
+  <Accordion title="Slow generation on high-end GPU" icon="hourglass">
+    **Causes:**
+    - CPU offload enabled unnecessarily
+    - PyTorch backend instead of vLLM
+    - Quantization on ≥20GB GPU
+    - torch.compile not enabled
+    
+    **Solutions:**
+    1. Disable CPU offload and DiT offload (≥20GB VRAM)
+    2. Use vLLM backend for LM (≥8GB VRAM)
+    3. Disable INT8 quantization (≥20GB VRAM)
+    4. Enable `compile_model=True` (one-time warmup)
+    5. Check GPU isn't thermal throttling
+  </Accordion>
+  
+  <Accordion title="Flash Attention not detected" icon="bolt">
+    **Causes:**
+    - flash-attn not installed
+    - Incompatible GPU (compute capability &lt;7.5)
+    - ROCm/XPU platform (limited support)
+    
+    **Solutions:**
+    1. Install flash-attn: `pip install flash-attn --no-build-isolation`
+    2. Verify GPU compatibility (RTX 20-series+, A100, H100)
+    3. Use PyTorch attention fallback (automatic)
+    4. Performance impact is minor (~10-15%)
+  </Accordion>
+  
+  <Accordion title="vLLM backend fails" icon="server">
+    **Causes:**
+    - Insufficient VRAM (&lt;8GB)
+    - Incompatible platform (XPU, old GPUs)
+    - vLLM installation issue
+    
+    **Solutions:**
+    1. Use PyTorch backend (`--backend pt`)
+    2. Ensure ≥8GB VRAM for vLLM
+    3. Reinstall vLLM: `pip install vllm`
+    4. Check vLLM compatibility with your GPU
+  </Accordion>
+  
+  <Accordion title="Apple Silicon (Mac) performance issues" icon="apple">
+    **Causes:**
+    - Using PyTorch backend instead of MLX
+    - CPU offload enabled (no benefit on unified memory)
+    - Swap thrashing (insufficient RAM)
+    
+    **Solutions:**
+    1. Use MLX backend: `--backend mlx`
+    2. Disable CPU offload (no benefit on Mac)
+    3. Ensure sufficient unified memory (16GB+ recommended)
+    4. Close memory-intensive applications
+    5. Monitor Activity Monitor for memory pressure
+  </Accordion>
+  
+  <Accordion title="ROCm on Windows issues" icon="amd">
+    **Causes:**
+    - Immature ROCm Windows support
+    - Incorrect Python version
+    - Driver incompatibilities
+    
+    **Solutions:**
+    1. Use Python 3.12 (AMD provides 3.12 wheels only)
+    2. Update ROCm to 6.2+
+    3. Update AMDGPU driver to latest
+    4. Consider using Linux for better stability
+    5. Check AMD ROCm documentation for your GPU
+  </Accordion>
+</AccordionGroup>
+
+## Performance Comparison
+
+### Generation Time by Platform (30s audio, Turbo + 1.7B LM)
+
+| GPU | VRAM | Tier | Time (seconds) | Relative Speed |
+|-----|------|------|----------------|----------------|
+| RTX 4090 | 24GB | Unlimited | 1.0-2.0 | 1.0x (baseline) |
+| RTX 4080 | 16GB | 6a | 1.5-3.0 | 0.75x |
+| RTX 3090 | 24GB | Unlimited | 2.0-4.0 | 0.5x |
+| RTX 3080 | 10GB | 4 | 4.0-8.0 | 0.25x |
+| RTX 3060 | 12GB | 5 | 6.0-12.0 | 0.17x |
+| RX 7900 XTX | 24GB | Unlimited | 2.5-5.0 | 0.4x |
+| RX 6900 XT | 16GB | 6a | 4.0-8.0 | 0.25x |
+| Arc A770 | 16GB | 6a | 8.0-16.0 | 0.125x |
+| M2 Max | 32GB | Unlimited | 8.0-15.0 | 0.125x |
+| M1 Pro | 16GB | 6a | 12.0-20.0 | 0.083x |
+| CPU (12-core) | 32GB RAM | N/A | 180-300 | 0.006x |
+
+<Info>
+  Times are approximate and vary with system configuration, cooling, and other factors.
+</Info>
+
+## Best Practices
+
+### For Production Workloads
+
+1. **Use NVIDIA GPUs** (CUDA) for best performance and stability
+2. **Minimum 12GB VRAM** recommended for comfortable generation
+3. **Enable vLLM backend** for LM (≥8GB VRAM)
+4. **Use Turbo model** for fast iteration
+5. **Enable torch.compile** for 20-30% speedup
+6. **Monitor VRAM usage** to avoid OOM
+
+### For Development/Testing
+
+1. **CPU mode** works for testing prompts (very slow)
+2. **Low VRAM GPUs** (6-8GB) acceptable for development
+3. **PyTorch backend** more stable for experimentation
+4. **Smaller LM models** (0.6B) for quick iteration
+
+### For Low-Budget Setups
+
+1. **RTX 3060 (12GB)** excellent value (~$250 used)
+2. **Tier 5 performance** handles most use cases
+3. **Enable all optimizations** (quantization, offloading)
+4. **Use Turbo model** exclusively
+5. **Batch size 2-4** for reasonable exploration
+
+### For High-End Production
+
+1. **RTX 4090 or A100** for fastest generation
+2. **24GB+ VRAM** runs all models without optimization
+3. **Batch size 8** for maximum throughput
+4. **Consider SFT model** for even better quality
+5. **Multi-GPU support** coming soon
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the hybrid LM+DiT design
+  </Card>
+  <Card title="Model Zoo" icon="layer-group" href="/concepts/models">
+    Choose the right models for your VRAM
+  </Card>
+  <Card title="Generation Process" icon="wand-magic-sparkles" href="/concepts/generation-process">
+    Learn how generation works
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install ACE-Step 1.5
+  </Card>
+</CardGroup>

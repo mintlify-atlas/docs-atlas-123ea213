@@ -1,0 +1,630 @@
+---
+title: API Endpoints
+description: Complete reference for all ACE-Step 1.5 REST API endpoints
+---
+
+## Generation Endpoints
+
+### POST /release_task
+
+Create a new music generation task and add it to the queue.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8001/release_task \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "upbeat pop song",
+    "lyrics": "Hello world",
+    "thinking": true,
+    "inference_steps": 8,
+    "audio_duration": 30
+  }'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8001/release_task",
+    json={
+        "prompt": "upbeat pop song",
+        "lyrics": "Hello world",
+        "thinking": True,
+        "inference_steps": 8,
+        "audio_duration": 30
+    }
+)
+result = response.json()
+task_id = result["data"]["task_id"]
+```
+
+</CodeGroup>
+
+**Request Body** (see [GenerateMusicRequest](/api/rest/models#generatemusicrequest) for full schema):
+
+<ParamField body="prompt" type="string" default="">
+  Music description prompt (caption)
+</ParamField>
+
+<ParamField body="lyrics" type="string" default="">
+  Lyrics content for vocal generation
+</ParamField>
+
+<ParamField body="thinking" type="boolean" default={false}>
+  Enable LM-generated audio codes for enhanced quality (lm-dit mode)
+</ParamField>
+
+<ParamField body="sample_mode" type="boolean" default={false}>
+  Auto-generate caption/lyrics/metadata from sample_query
+</ParamField>
+
+<ParamField body="sample_query" type="string" default="">
+  Natural language description for sample_mode (e.g., "a soft Bengali love song")
+</ParamField>
+
+<ParamField body="use_format" type="boolean" default={false}>
+  Use LM to enhance/format the provided caption and lyrics
+</ParamField>
+
+<ParamField body="model" type="string">
+  Select DiT model (e.g., "acestep-v15-turbo", "acestep-v15-turbo-shift3")
+</ParamField>
+
+<ParamField body="inference_steps" type="integer" default={8}>
+  Number of inference steps (Turbo: 1-20, Base: 1-200)
+</ParamField>
+
+<ParamField body="audio_duration" type="number">
+  Generation duration in seconds (10-600)
+</ParamField>
+
+<ParamField body="bpm" type="integer">
+  Tempo in BPM (30-300)
+</ParamField>
+
+<ParamField body="key_scale" type="string" default="">
+  Musical key/scale (e.g., "C Major", "Am")
+</ParamField>
+
+<ParamField body="time_signature" type="string" default="">
+  Time signature: "2" (2/4), "3" (3/4), "4" (4/4), or "6" (6/8)
+</ParamField>
+
+<ParamField body="vocal_language" type="string" default="en">
+  Lyrics language: en, zh, ja, etc.
+</ParamField>
+
+<ParamField body="batch_size" type="integer" default={2}>
+  Number of variations to generate (max 8)
+</ParamField>
+
+<ParamField body="seed" type="integer" default={-1}>
+  Random seed for reproducibility
+</ParamField>
+
+<ParamField body="use_random_seed" type="boolean" default={true}>
+  Use random seed for each generation
+</ParamField>
+
+**Response**:
+
+```json
+{
+  "data": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "queue_position": 1
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+**Advanced Parameters**:
+
+<ParamField body="task_type" type="string" default="text2music">
+  Task type: `text2music`, `cover`, `repaint`, `lego`, `extract`, `complete`
+</ParamField>
+
+<ParamField body="reference_audio_path" type="string">
+  Reference audio file path on server (for style transfer)
+</ParamField>
+
+<ParamField body="src_audio_path" type="string">
+  Source audio file path on server (for cover/repaint tasks)
+</ParamField>
+
+<ParamField body="audio_cover_strength" type="number" default={1.0}>
+  Cover strength (0.0-1.0). Lower values (0.2) for style transfer.
+</ParamField>
+
+<ParamField body="shift" type="number" default={3.0}>
+  Timestep shift factor (1.0-5.0, only for base models)
+</ParamField>
+
+<ParamField body="timesteps" type="string">
+  Custom timesteps as comma-separated values (e.g., "0.97,0.76,0.615,0.5,0.395,0.28,0.18,0.085,0")
+</ParamField>
+
+<ParamField body="use_adg" type="boolean" default={false}>
+  Use Adaptive Dual Guidance (base model only)
+</ParamField>
+
+<ParamField body="infer_method" type="string" default="ode">
+  Diffusion inference method: `ode` (Euler, faster) or `sde` (stochastic)
+</ParamField>
+
+**LM Parameters**:
+
+<ParamField body="lm_temperature" type="number" default={0.85}>
+  LM sampling temperature
+</ParamField>
+
+<ParamField body="lm_cfg_scale" type="number" default={2.5}>
+  LM CFG scale (>1 enables CFG)
+</ParamField>
+
+<ParamField body="lm_top_p" type="number" default={0.9}>
+  LM top-p nucleus sampling
+</ParamField>
+
+<ParamField body="use_cot_caption" type="boolean" default={true}>
+  Let LM rewrite/enhance input caption via chain-of-thought
+</ParamField>
+
+<ParamField body="use_cot_language" type="boolean" default={true}>
+  Let LM detect vocal language via chain-of-thought
+</ParamField>
+
+---
+
+### POST /query_result
+
+Batch query the status and results of one or more generation tasks.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8001/query_result \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_id_list": ["550e8400-e29b-41d4-a716-446655440000"]
+  }'
+```
+
+```python Python
+import requests
+import json
+
+response = requests.post(
+    "http://localhost:8001/query_result",
+    json={
+        "task_id_list": ["550e8400-e29b-41d4-a716-446655440000"]
+    }
+)
+result = response.json()
+task_data = result["data"][0]
+status = task_data["status"]
+
+if status == 1:  # Success
+    result_data = json.loads(task_data["result"])[0]
+    audio_url = result_data["file"]
+    print(f"Audio URL: {audio_url}")
+```
+
+</CodeGroup>
+
+**Request Body**:
+
+<ParamField body="task_id_list" type="string[] | string" required>
+  Array of task IDs to query (can be JSON array or JSON string)
+</ParamField>
+
+**Response**:
+
+```json
+{
+  "data": [
+    {
+      "task_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": 1,
+      "result": "[{\"file\":\"/v1/audio?path=...\",\"status\":1,\"create_time\":1700000000,\"prompt\":\"upbeat pop song\",\"lyrics\":\"Hello world\",\"metas\":{\"bpm\":120,\"duration\":30,\"keyscale\":\"C Major\",\"timesignature\":\"4\"},\"seed_value\":\"12345,67890\",\"lm_model\":\"acestep-5Hz-lm-0.6B\",\"dit_model\":\"acestep-v15-turbo\"}]"
+    }
+  ],
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+**Result Field** (after parsing the `result` JSON string):
+
+<ResponseField name="file" type="string">
+  Audio file download URL (relative path for `/v1/audio` endpoint)
+</ResponseField>
+
+<ResponseField name="status" type="integer">
+  Task status: 0 (running), 1 (success), 2 (failed)
+</ResponseField>
+
+<ResponseField name="create_time" type="integer">
+  Task creation timestamp (Unix seconds)
+</ResponseField>
+
+<ResponseField name="prompt" type="string">
+  Prompt/caption used for generation
+</ResponseField>
+
+<ResponseField name="lyrics" type="string">
+  Lyrics used for generation
+</ResponseField>
+
+<ResponseField name="metas" type="object">
+  Metadata object containing bpm, duration, keyscale, timesignature
+</ResponseField>
+
+<ResponseField name="seed_value" type="string">
+  Comma-separated seed values used
+</ResponseField>
+
+<ResponseField name="lm_model" type="string">
+  LM model name used
+</ResponseField>
+
+<ResponseField name="dit_model" type="string">
+  DiT model name used
+</ResponseField>
+
+---
+
+## Utility Endpoints
+
+### POST /create_random_sample
+
+Get a random sample with pre-filled parameters from example data.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8001/create_random_sample \
+  -H "Content-Type: application/json" \
+  -d '{"sample_type": "simple_mode"}'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8001/create_random_sample",
+    json={"sample_type": "simple_mode"}
+)
+sample = response.json()["data"]
+```
+
+</CodeGroup>
+
+**Request Body**:
+
+<ParamField body="sample_type" type="string" default="simple_mode">
+  Sample type: `simple_mode` or `custom_mode`
+</ParamField>
+
+**Response**:
+
+```json
+{
+  "data": {
+    "caption": "Upbeat pop song with guitar accompaniment",
+    "lyrics": "[Verse 1]\nSunshine on my face...",
+    "bpm": 120,
+    "key_scale": "G Major",
+    "time_signature": "4",
+    "duration": 180,
+    "vocal_language": "en"
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+---
+
+### POST /format_input
+
+Use LLM to enhance and format user-provided caption and lyrics.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8001/format_input \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "pop rock",
+    "lyrics": "Walking down the street",
+    "temperature": 0.85,
+    "param_obj": "{\"duration\": 180, \"language\": \"en\"}"
+  }'
+```
+
+```python Python
+import requests
+import json
+
+response = requests.post(
+    "http://localhost:8001/format_input",
+    json={
+        "prompt": "pop rock",
+        "lyrics": "Walking down the street",
+        "temperature": 0.85,
+        "param_obj": json.dumps({"duration": 180, "language": "en"})
+    }
+)
+formatted = response.json()["data"]
+```
+
+</CodeGroup>
+
+**Request Body**:
+
+<ParamField body="prompt" type="string" default="">
+  Music description prompt to enhance
+</ParamField>
+
+<ParamField body="lyrics" type="string" default="">
+  Lyrics content to format
+</ParamField>
+
+<ParamField body="temperature" type="number" default={0.85}>
+  LLM sampling temperature
+</ParamField>
+
+<ParamField body="param_obj" type="string" default="{}">
+  JSON string containing metadata: duration, bpm, key, time_signature, language
+</ParamField>
+
+**Response**:
+
+```json
+{
+  "data": {
+    "caption": "Enhanced music description",
+    "lyrics": "Formatted lyrics...",
+    "bpm": 120,
+    "key_scale": "C Major",
+    "time_signature": "4",
+    "duration": 180,
+    "vocal_language": "en"
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+---
+
+## Model Management Endpoints
+
+### GET /v1/models
+
+List all available DiT and LM models with their load status.
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:8001/v1/models
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8001/v1/models")
+models = response.json()["data"]
+```
+
+</CodeGroup>
+
+**Response**:
+
+```json
+{
+  "data": {
+    "models": [
+      {
+        "name": "acestep-v15-turbo",
+        "is_default": true,
+        "is_loaded": true
+      },
+      {
+        "name": "acestep-v15-turbo-shift3",
+        "is_default": false,
+        "is_loaded": false
+      }
+    ],
+    "default_model": "acestep-v15-turbo",
+    "lm_models": [
+      {
+        "name": "acestep-5Hz-lm-0.6B",
+        "is_loaded": true
+      },
+      {
+        "name": "acestep-5Hz-lm-1.7B",
+        "is_loaded": false
+      }
+    ],
+    "loaded_lm_model": "acestep-5Hz-lm-0.6B",
+    "llm_initialized": true
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+---
+
+### GET /v1/audio
+
+Download a generated audio file by path.
+
+<CodeGroup>
+
+```bash cURL
+curl "http://localhost:8001/v1/audio?path=%2Ftmp%2Fapi_audio%2Fabc123.mp3" -o output.mp3
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "http://localhost:8001/v1/audio",
+    params={"path": "/tmp/api_audio/abc123.mp3"}
+)
+
+with open("output.mp3", "wb") as f:
+    f.write(response.content)
+```
+
+</CodeGroup>
+
+**Query Parameters**:
+
+<ParamField query="path" type="string" required>
+  URL-encoded path to the audio file (from task result)
+</ParamField>
+
+**Response**: Binary audio file with appropriate `Content-Type` header:
+- `.mp3` → `audio/mpeg`
+- `.wav` → `audio/wav`
+- `.flac` → `audio/flac`
+- `.ogg` → `audio/ogg`
+
+---
+
+### GET /health
+
+Check service health and model initialization status.
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:8001/health
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8001/health")
+health = response.json()["data"]
+print(f"Status: {health['status']}")
+print(f"Models initialized: {health['models_initialized']}")
+```
+
+</CodeGroup>
+
+**Response**:
+
+```json
+{
+  "data": {
+    "status": "ok",
+    "service": "ACE-Step API",
+    "version": "1.0",
+    "models_initialized": true,
+    "llm_initialized": true,
+    "loaded_model": "acestep-v15-turbo",
+    "loaded_lm_model": "acestep-5Hz-lm-0.6B"
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+---
+
+### GET /v1/stats
+
+Get server runtime statistics including job queue and performance metrics.
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:8001/v1/stats
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8001/v1/stats")
+stats = response.json()["data"]
+print(f"Queue size: {stats['queue_size']}/{stats['queue_maxsize']}")
+print(f"Average job time: {stats['avg_job_seconds']}s")
+```
+
+</CodeGroup>
+
+**Response**:
+
+```json
+{
+  "data": {
+    "jobs": {
+      "total": 100,
+      "queued": 5,
+      "running": 1,
+      "succeeded": 90,
+      "failed": 4
+    },
+    "queue_size": 5,
+    "queue_maxsize": 200,
+    "avg_job_seconds": 8.5
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+<ResponseField name="jobs" type="object">
+  Job statistics breakdown by status
+</ResponseField>
+
+<ResponseField name="queue_size" type="integer">
+  Current number of jobs in queue
+</ResponseField>
+
+<ResponseField name="queue_maxsize" type="integer">
+  Maximum queue capacity
+</ResponseField>
+
+<ResponseField name="avg_job_seconds" type="number">
+  Average job completion time in seconds
+</ResponseField>
+
+---
+
+## Upload Audio Files
+
+For tasks requiring audio files (cover, repaint, style transfer), use `multipart/form-data`:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -F "prompt=remix this song" \
+  -F "src_audio=@/path/to/local/song.mp3" \
+  -F "task_type=repaint" \
+  -F "thinking=true"
+```
+
+**File Upload Fields**:
+
+- `reference_audio` or `ref_audio` - Reference audio file for style transfer
+- `src_audio` or `ctx_audio` - Source audio file for cover/repaint tasks
+
+<Info>
+  When uploading files, the corresponding `*_path` parameters are automatically ignored.
+</Info>

@@ -1,0 +1,182 @@
+---
+title: GenerationConfig
+description: Configuration dataclass for generation runtime settings
+---
+
+`GenerationConfig` controls runtime settings for music generation, including batch processing, seeding, and output format.
+
+## Constructor
+
+```python
+from acestep.inference import GenerationConfig
+
+config = GenerationConfig(
+    batch_size=4,
+    use_random_seed=False,
+    seeds=[42, 123, 456, 789],
+    audio_format="flac"
+)
+```
+
+## Parameters
+
+<ParamField path="batch_size" type="int" default="2">
+  Number of audio samples to generate in parallel.
+</ParamField>
+
+<ParamField path="allow_lm_batch" type="bool" default="False">
+  Whether to allow batch processing in the Language Model (LM).
+</ParamField>
+
+<ParamField path="use_random_seed" type="bool" default="True">
+  Whether to use random seeds for generation. If `False`, uses seeds from `seeds` parameter or `GenerationParams.seed`.
+</ParamField>
+
+<ParamField path="seeds" type="Optional[List[int]]" default="None">
+  Seed(s) for batch generation. Behavior:
+  - `None`: Use random seeds (when `use_random_seed=True`) or `params.seed` (when `use_random_seed=False`)
+  - `List[int]`: List of seeds, will be padded with random seeds if fewer than `batch_size`
+  - `int`: Single seed value (will be converted to list and padded)
+</ParamField>
+
+<ParamField path="lm_batch_chunk_size" type="int" default="8">
+  Batch chunk size for LM processing. Controls how many samples are processed together in the language model.
+</ParamField>
+
+<ParamField path="constrained_decoding_debug" type="bool" default="False">
+  Whether to enable debug logging for constrained decoding in the LM.
+</ParamField>
+
+<ParamField path="audio_format" type="str" default="'flac'">
+  Output audio format. Options: `"mp3"`, `"wav"`, `"flac"`, `"wav32"`, `"opus"`, `"aac"`. Default: `"flac"` for fast saving.
+</ParamField>
+
+## Methods
+
+### to_dict()
+
+```python
+def to_dict(self) -> Dict[str, Any]
+```
+
+Convert configuration to dictionary for JSON serialization.
+
+**Returns:**
+- Dictionary representation of all parameters
+
+## Seed Configuration Examples
+
+### Random Seeds
+
+```python
+config = GenerationConfig(
+    batch_size=4,
+    use_random_seed=True
+)
+# Each sample will use a different random seed
+```
+
+### Fixed Single Seed
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig
+
+params = GenerationParams(seed=42)
+config = GenerationConfig(
+    batch_size=4,
+    use_random_seed=False
+)
+# All 4 samples will use seed 42
+```
+
+### Different Seed Per Sample
+
+```python
+config = GenerationConfig(
+    batch_size=4,
+    use_random_seed=False,
+    seeds=[42, 123, 456, 789]
+)
+# Each sample uses its corresponding seed
+```
+
+### Partial Seed List (Auto-padding)
+
+```python
+config = GenerationConfig(
+    batch_size=4,
+    use_random_seed=False,
+    seeds=[42, 123]  # Only 2 seeds for 4 samples
+)
+# First 2 samples use seeds 42 and 123
+# Remaining 2 samples use random seeds
+```
+
+## Output Format Examples
+
+### High-Quality WAV (32-bit float)
+
+```python
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="wav32"
+)
+# Saves as 32-bit float WAV (best quality, large files)
+```
+
+### Compressed MP3
+
+```python
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="mp3"
+)
+# Saves as MP3 (smaller files, lossy compression)
+```
+
+### Lossless FLAC (Recommended)
+
+```python
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="flac"
+)
+# Saves as FLAC (lossless compression, fast saving)
+```
+
+## Usage Example
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+# Create generation parameters
+params = GenerationParams(
+    caption="Upbeat electronic dance music",
+    lyrics="[Instrumental]",
+    duration=30,
+    inference_steps=8
+)
+
+# Create runtime configuration
+config = GenerationConfig(
+    batch_size=4,
+    use_random_seed=False,
+    seeds=[100, 200, 300, 400],  # Different seed for each sample
+    audio_format="flac",
+    lm_batch_chunk_size=8
+)
+
+# Generate music
+result = generate_music(
+    dit_handler=handler,
+    llm_handler=llm_handler,
+    params=params,
+    config=config,
+    save_dir="./output"
+)
+
+if result.success:
+    print(f"Generated {len(result.audios)} audio files")
+    for audio in result.audios:
+        print(f"- {audio['path']} (seed: {audio['params']['seed']})")
+```

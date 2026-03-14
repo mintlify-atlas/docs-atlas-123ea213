@@ -1,0 +1,603 @@
+---
+title: 'REST API Usage'
+description: 'HTTP API for asynchronous music generation and job management'
+---
+
+The ACE-Step REST API provides a complete HTTP interface for music generation, supporting async job queues, multiple models, and batch processing.
+
+## Starting the API Server
+
+### Basic Startup
+
+```bash
+python -m acestep.api_server
+```
+
+The server starts on `http://127.0.0.1:8001` by default.
+
+### Environment Configuration
+
+```bash .env
+# Server Configuration
+ACESTEP_API_HOST=127.0.0.1
+ACESTEP_API_PORT=8001
+ACESTEP_API_KEY=your-secret-key  # Optional authentication
+ACESTEP_API_WORKERS=1
+
+# Model Configuration  
+ACESTEP_CONFIG_PATH=acestep-v15-turbo
+ACESTEP_CONFIG_PATH2=  # Optional secondary model
+ACESTEP_CONFIG_PATH3=  # Optional third model
+ACESTEP_DEVICE=auto
+
+# LM Configuration
+ACESTEP_INIT_LLM=auto
+ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B
+ACESTEP_LM_BACKEND=vllm
+
+# Queue Configuration
+ACESTEP_QUEUE_MAXSIZE=200
+ACESTEP_QUEUE_WORKERS=1
+ACESTEP_AVG_JOB_SECONDS=5.0
+```
+
+### Command-Line Arguments
+
+```bash
+# Specify API key
+python -m acestep.api_server --api-key your-secret-key
+
+# Custom host and port
+python -m acestep.api_server --host 0.0.0.0 --port 8080
+
+# Multiple workers (single GPU recommended)
+python -m acestep.api_server --workers 1
+```
+
+## Authentication
+
+API key authentication is optional. When enabled, requests must include a valid key.
+
+### Method 1: Request Body
+
+```json
+{
+  "ai_token": "your-api-key",
+  "prompt": "upbeat pop song",
+  ...
+}
+```
+
+### Method 2: Authorization Header
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -H 'Authorization: Bearer your-api-key' \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "upbeat pop song"}'
+```
+
+## Core Workflow
+
+The API uses an asynchronous task queue pattern:
+
+<Steps>
+  <Step title="Submit Task">
+    Call `POST /release_task` to create a generation job
+    ```json
+    {"task_id": "550e8400-e29b-...", "status": "queued"}
+    ```
+  </Step>
+  
+  <Step title="Poll Status">
+    Call `POST /query_result` to check task status
+    ```json
+    {"task_id": "...", "status": 0}  // 0=running, 1=success, 2=failed
+    ```
+  </Step>
+  
+  <Step title="Download Audio">
+    Use returned audio URLs with `GET /v1/audio?path=...`
+  </Step>
+</Steps>
+
+## Task Status Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `0` | queued/running | Task is in progress |
+| `1` | succeeded | Generation complete, audio ready |
+| `2` | failed | Generation failed, check error |
+
+## API Endpoints
+
+### Create Generation Task
+
+`POST /release_task`
+
+Submits a music generation task to the queue.
+
+<CodeGroup>
+```bash Basic Request
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat pop song",
+    "lyrics": "Hello world",
+    "inference_steps": 8
+  }'
+```
+
+```bash With Thinking (LM)
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "upbeat pop song",
+    "lyrics": "Hello world",
+    "thinking": true,
+    "lm_temperature": 0.85,
+    "lm_cfg_scale": 2.5
+  }'
+```
+
+```bash Simple Mode
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sample_query": "a soft Bengali love song for a quiet evening",
+    "thinking": true
+  }'
+```
+
+```bash With Custom Timesteps
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "jazz piano trio",
+    "timesteps": "0.97,0.76,0.615,0.5,0.395,0.28,0.18,0.085,0",
+    "thinking": true
+  }'
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "data": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "queue_position": 1
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+#### Key Parameters
+
+<ParamField body="prompt" type="string">
+  Music description (alias: `caption`). Max 512 characters.
+</ParamField>
+
+<ParamField body="lyrics" type="string">
+  Lyrics text. Use `"[Instrumental]"` for instrumental tracks.
+</ParamField>
+
+<ParamField body="thinking" type="boolean" default="false">
+  Enable 5Hz LM for code generation and metadata enhancement.
+</ParamField>
+
+<ParamField body="sample_query" type="string">
+  Natural language description for auto-generation (Simple Mode). Aliases: `description`, `desc`.
+</ParamField>
+
+<ParamField body="use_format" type="boolean" default="false">
+  Enhance caption/lyrics using LM before generation.
+</ParamField>
+
+<ParamField body="model" type="string">
+  Select DiT model (e.g., `"acestep-v15-turbo"`). Use `/v1/models` to list available models.
+</ParamField>
+
+<ParamField body="bpm" type="integer">
+  Tempo in beats per minute (30-300). Null for auto-detection.
+</ParamField>
+
+<ParamField body="key_scale" type="string">
+  Musical key (e.g., `"C Major"`, `"Am"`). Empty for auto-detection.
+</ParamField>
+
+<ParamField body="audio_duration" type="float">
+  Target length in seconds (10-600). -1 or null for auto.
+</ParamField>
+
+<ParamField body="batch_size" type="integer" default="2">
+  Number of variations to generate (1-8).
+</ParamField>
+
+<ParamField body="inference_steps" type="integer" default="8">
+  Denoising steps. Turbo: 1-20, Base: 1-200.
+</ParamField>
+
+<ParamField body="shift" type="float" default="1.0">
+  Timestep shift factor (1.0-5.0). Recommended 3.0 for turbo models.
+</ParamField>
+
+<ParamField body="timesteps" type="string">
+  Custom timesteps as comma-separated values (e.g., `"0.97,0.76,0.5,0"`). Overrides steps and shift.
+</ParamField>
+
+<ParamField body="task_type" type="string" default="text2music">
+  Generation task: `text2music`, `cover`, `repaint`, `lego`, `extract`, `complete`.
+</ParamField>
+
+### File Upload (multipart/form-data)
+
+Upload local audio files as reference or source:
+
+```bash
+curl -X POST http://localhost:8001/release_task \
+  -F "prompt=remix this song" \
+  -F "src_audio=@/path/to/local/song.mp3" \
+  -F "task_type=repaint"
+```
+
+**File Fields:**
+- `reference_audio` or `ref_audio` - Upload reference audio
+- `src_audio` or `ctx_audio` - Upload source audio
+
+### Query Task Results
+
+`POST /query_result`
+
+Batch query status of multiple tasks.
+
+```bash
+curl -X POST http://localhost:8001/query_result \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id_list": ["550e8400-e29b-41d4-a716-446655440000"]
+  }'
+```
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "task_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": 1,
+      "result": "[{\"file\": \"/v1/audio?path=...\", ...}]"
+    }
+  ],
+  "code": 200,
+  "error": null,
+  "timestamp": 1700000000000
+}
+```
+
+**Result Fields** (JSON string, parse to access):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file` | string | Audio file URL (use with `/v1/audio`) |
+| `status` | int | Status code (0=in progress, 1=success, 2=failed) |
+| `prompt` | string | Prompt used |
+| `lyrics` | string | Lyrics used |
+| `metas` | object | Metadata (bpm, duration, keyscale, etc.) |
+| `generation_info` | string | Generation summary |
+| `seed_value` | string | Seeds used (comma-separated) |
+| `lm_model` | string | LM model name |
+| `dit_model` | string | DiT model name |
+
+### Format Input
+
+`POST /format_input`
+
+Enhance caption and lyrics using LLM.
+
+```bash
+curl -X POST http://localhost:8001/format_input \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "pop rock",
+    "lyrics": "Walking down the street",
+    "param_obj": "{\"duration\": 180, \"language\": \"en\"}"
+  }'
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "caption": "Enhanced music description",
+    "lyrics": "Formatted lyrics...",
+    "bpm": 120,
+    "key_scale": "C Major",
+    "time_signature": "4",
+    "duration": 180,
+    "vocal_language": "en"
+  },
+  "code": 200
+}
+```
+
+### Get Random Sample
+
+`POST /create_random_sample`
+
+Generate random sample parameters from examples.
+
+```bash
+curl -X POST http://localhost:8001/create_random_sample \
+  -H 'Content-Type: application/json' \
+  -d '{"sample_type": "simple_mode"}'
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "caption": "Upbeat pop song with guitar",
+    "lyrics": "[Verse 1]\nSunshine on my face...",
+    "bpm": 120,
+    "key_scale": "G Major",
+    "duration": 180
+  },
+  "code": 200
+}
+```
+
+### List Available Models
+
+`GET /v1/models`
+
+Returns all loaded DiT models.
+
+```bash
+curl http://localhost:8001/v1/models
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "models": [
+      {"name": "acestep-v15-turbo", "is_default": true},
+      {"name": "acestep-v15-turbo-shift3", "is_default": false}
+    ],
+    "default_model": "acestep-v15-turbo"
+  },
+  "code": 200
+}
+```
+
+### Download Audio
+
+`GET /v1/audio`
+
+Download generated audio files.
+
+```bash
+curl "http://localhost:8001/v1/audio?path=%2Ftmp%2Fapi_audio%2Fabc123.mp3" -o output.mp3
+```
+
+### Server Statistics
+
+`GET /v1/stats`
+
+Returns server runtime stats.
+
+```bash
+curl http://localhost:8001/v1/stats
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "jobs": {
+      "total": 100,
+      "queued": 5,
+      "running": 1,
+      "succeeded": 90,
+      "failed": 4
+    },
+    "queue_size": 5,
+    "queue_maxsize": 200,
+    "avg_job_seconds": 8.5
+  },
+  "code": 200
+}
+```
+
+### Health Check
+
+`GET /health`
+
+Verify service health.
+
+```bash
+curl http://localhost:8001/health
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "status": "ok",
+    "service": "ACE-Step API",
+    "version": "1.0"
+  },
+  "code": 200
+}
+```
+
+## Python Client Example
+
+Complete async workflow using `requests`:
+
+```python
+import requests
+import time
+import json
+
+BASE_URL = "http://localhost:8001"
+API_KEY = "your-api-key"  # Optional
+
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {API_KEY}"  # If auth enabled
+}
+
+# Step 1: Submit task
+payload = {
+    "prompt": "energetic rock music with electric guitars",
+    "lyrics": "[Instrumental]",
+    "thinking": True,
+    "batch_size": 2,
+    "inference_steps": 8
+}
+
+response = requests.post(
+    f"{BASE_URL}/release_task",
+    headers=headers,
+    json=payload
+)
+
+if response.status_code != 200:
+    print(f"Error: {response.text}")
+    exit(1)
+
+data = response.json()["data"]
+task_id = data["task_id"]
+print(f"Task created: {task_id}")
+
+# Step 2: Poll for completion
+while True:
+    response = requests.post(
+        f"{BASE_URL}/query_result",
+        headers=headers,
+        json={"task_id_list": [task_id]}
+    )
+    
+    result = response.json()["data"][0]
+    status = result["status"]
+    
+    if status == 1:  # Success
+        print("Generation complete!")
+        break
+    elif status == 2:  # Failed
+        print("Generation failed")
+        exit(1)
+    else:
+        print("Still processing...")
+        time.sleep(5)
+
+# Step 3: Parse results
+result_data = json.loads(result["result"])
+for i, audio in enumerate(result_data, 1):
+    audio_url = f"{BASE_URL}{audio['file']}"
+    print(f"\nAudio {i}:")
+    print(f"  URL: {audio_url}")
+    print(f"  BPM: {audio['metas']['bpm']}")
+    print(f"  Key: {audio['metas']['keyscale']}")
+    print(f"  Seed: {audio['seed_value']}")
+    
+    # Download audio
+    audio_response = requests.get(audio_url)
+    with open(f"output_{i}.mp3", "wb") as f:
+        f.write(audio_response.content)
+    print(f"  Saved: output_{i}.mp3")
+```
+
+## Error Handling
+
+### HTTP Status Codes
+
+| Code | Meaning |
+|------|----------|
+| `200` | Success |
+| `400` | Invalid request (bad JSON, missing fields) |
+| `401` | Unauthorized (missing/invalid API key) |
+| `404` | Resource not found |
+| `415` | Unsupported Content-Type |
+| `429` | Server busy (queue full) |
+| `500` | Internal server error |
+
+### Error Response Format
+
+```json
+{
+  "detail": "Error message describing the issue"
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use thinking=true" icon="brain">
+    Enable LM for best quality results with automatic metadata
+  </Card>
+  
+  <Card title="Batch queries" icon="layer-group">
+    Query multiple task IDs in a single request
+  </Card>
+  
+  <Card title="Check stats" icon="chart-line">
+    Monitor `/v1/stats` to understand server load
+  </Card>
+  
+  <Card title="Secure with API key" icon="lock">
+    Set `ACESTEP_API_KEY` for production deployments
+  </Card>
+</CardGroup>
+
+### Multi-Model Setup
+
+Load multiple models for model selection:
+
+```bash .env
+ACESTEP_CONFIG_PATH=acestep-v15-turbo
+ACESTEP_CONFIG_PATH2=acestep-v15-turbo-shift3
+ACESTEP_CONFIG_PATH3=acestep-v15-base
+```
+
+Then select with `model` parameter:
+
+```json
+{
+  "prompt": "electronic dance music",
+  "model": "acestep-v15-turbo-shift3",
+  "thinking": true
+}
+```
+
+### Low VRAM Optimization
+
+```bash .env
+ACESTEP_OFFLOAD_TO_CPU=true
+ACESTEP_OFFLOAD_DIT_TO_CPU=true
+ACESTEP_INIT_LLM=false  # Disable LM on very low VRAM
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Python API" icon="python" href="/guides/python-api">
+    Direct programmatic control without HTTP overhead
+  </Card>
+  
+  <Card title="CLI" icon="terminal" href="/guides/cli">
+    Command-line interface for scripting
+  </Card>
+  
+  <Card title="Gradio UI" icon="window" href="/guides/gradio-ui">
+    Interactive web interface
+  </Card>
+  
+  <Card title="Parameter Reference" icon="book" href="/api/generation-params">
+    Complete parameter documentation
+  </Card>
+</CardGroup>

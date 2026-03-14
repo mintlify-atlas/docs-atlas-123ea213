@@ -1,0 +1,308 @@
+---
+title: 'LLM Configuration'
+description: 'Configure the 5Hz Language Model for Chain-of-Thought reasoning'
+icon: 'brain'
+---
+
+## Overview
+
+ACE-Step 1.5 uses a 5Hz Language Model for Chain-of-Thought (CoT) reasoning about music metadata and semantic code generation. This guide covers LM configuration, sampling parameters, and backend selection.
+
+## LM Model Selection
+
+Three model sizes are available, with different VRAM requirements:
+
+| Model | Size | VRAM Required | Speed | Quality |
+|-------|------|---------------|-------|--------|
+| `acestep-5Hz-lm-0.6B` | 0.6B | 4-6GB | Fast | Good |
+| `acestep-5Hz-lm-1.7B` | 1.7B | 8-12GB | Medium | Better |
+| `acestep-5Hz-lm-4B` | 4B | 16GB+ | Slow | Best |
+
+### Automatic Model Selection
+
+The system automatically selects the largest model that fits in VRAM based on GPU tier:
+
+- **Tier 1-3** (4-6GB): 0.6B model
+- **Tier 4-5** (8-12GB): 1.7B model
+- **Tier 6+** (16GB+): 4B model (if available)
+
+See [GPU Compatibility](/concepts/gpu-compatibility) for detailed tier information.
+
+## Backend Selection
+
+<ParamField path="lm_backend" type="string" default="auto">
+  LLM inference backend. Valid values: `"auto"`, `"vllm"`, `"pt"`, `"mlx"`.
+  
+  **Backend recommendations:**
+  - **NVIDIA GPU:** `vllm` (fastest, recommended)
+  - **Apple Silicon:** `mlx` (optimized for M-series chips)
+  - **AMD GPU (ROCm):** `pt` (PyTorch, most compatible)
+  - **CPU:** `pt` (only option)
+  
+  **Auto-detection logic:**
+  - macOS + Apple Silicon → `mlx`
+  - CUDA available → `vllm`
+  - Fallback → `pt`
+</ParamField>
+
+### Backend Comparison
+
+| Backend | Platform | Speed | Memory | Stability |
+|---------|----------|-------|--------|----------|
+| `vllm` | NVIDIA GPU | Fastest | Efficient | Excellent |
+| `mlx` | Apple Silicon | Fast | Very efficient | Excellent |
+| `pt` | Universal | Slower | Higher usage | Excellent |
+
+## Chain-of-Thought (CoT) Options
+
+### Enabling CoT Reasoning
+
+<ParamField path="thinking" type="boolean" default="true">
+  Enable 5Hz Language Model Chain-of-Thought reasoning for semantic codes and metadata.
+  
+  **When enabled:**
+  - LM generates audio semantic codes
+  - Improves metadata estimation
+  - Increases generation time (~2-5s)
+  
+  **When disabled:**
+  - Faster generation
+  - DiT generates directly from prompt
+  - No LM inference overhead
+</ParamField>
+
+### Selective CoT Features
+
+<ParamField path="use_cot_metas" type="boolean" default="true">
+  Let LLM generate music metadata (BPM, key, time signature) via CoT reasoning.
+  
+  **When enabled:**
+  - LM estimates missing metadata fields
+  - Overrides user-provided values if empty
+  - Improves coherence of metadata
+  
+  **Requires:** `thinking=true`
+</ParamField>
+
+<ParamField path="use_cot_caption" type="boolean" default="true">
+  Let LLM rewrite or format the input caption via CoT reasoning.
+  
+  **When enabled:**
+  - LM enhances/structures the caption
+  - Improves prompt clarity for DiT
+  - May alter user's original phrasing
+  
+  **Requires:** `thinking=true`
+</ParamField>
+
+<ParamField path="use_cot_language" type="boolean" default="true">
+  Let LLM detect vocal language via CoT reasoning.
+  
+  **When enabled:**
+  - LM detects language from caption/lyrics
+  - Overrides `vocal_language` if set to `"unknown"`
+  - Improves multilingual support
+  
+  **Requires:** `thinking=true`
+</ParamField>
+
+## Sampling Parameters
+
+<ParamField path="lm_temperature" type="float" default="0.85">
+  Sampling temperature for the LLM. Range: **0.0-2.0**.
+  
+  **Effects:**
+  - `0.0-0.5`: Deterministic, conservative
+  - `0.85` (default): Balanced creativity
+  - `1.0-1.5`: More creative/varied
+  - `1.5+`: Very random, experimental
+  
+  **Recommended values:**
+  - Caption generation: 0.7-0.9
+  - Metadata estimation: 0.5-0.7
+  - Creative exploration: 1.0-1.2
+</ParamField>
+
+<ParamField path="lm_cfg_scale" type="float" default="2.0">
+  Classifier-free guidance scale for the LLM. Range: **1.0-5.0**.
+  
+  **Effects:**
+  - `1.0`: No CFG (faster)
+  - `2.0` (default): Moderate guidance
+  - `3.0+`: Strong guidance (slower)
+  
+  **Note:** Values > 1.0 require two forward passes (doubles LM time).
+</ParamField>
+
+<ParamField path="lm_top_k" type="integer" default="0">
+  LLM top-k sampling. Range: **0-100**. `0` = disabled.
+  
+  **Effects:**
+  - Limits vocabulary to top K most likely tokens
+  - Lower K = more focused output
+  - Higher K = more diverse output
+  
+  **Typical values:**
+  - `0`: Disabled (default)
+  - `40-50`: Moderate filtering
+  - `10-20`: Strong filtering
+</ParamField>
+
+<ParamField path="lm_top_p" type="float" default="0.9">
+  LLM top-p (nucleus) sampling. Range: **0.0-1.0**. `1.0` = disabled.
+  
+  **Effects:**
+  - Samples from smallest set of tokens with cumulative probability ≥ p
+  - Lower p = more focused output
+  - Higher p = more diverse output
+  
+  **Typical values:**
+  - `0.9` (default): Balanced
+  - `0.95`: More diverse
+  - `0.7-0.8`: More focused
+</ParamField>
+
+## LM Negative Prompts
+
+<ParamField path="lm_negative_prompt" type="string" default="NO USER INPUT">
+  Negative prompt for LLM guidance. Used to steer LM away from undesired outputs.
+  
+  **Usage:**
+  - Default: `"NO USER INPUT"` (guides away from generating placeholder text)
+  - Custom: Specify concepts to avoid
+  
+  **Examples:**
+  - `"instrumental, no vocals, ambient"`
+  - `"repetitive, boring, generic"`
+  
+  **Requires:** `lm_cfg_scale > 1.0`
+</ParamField>
+
+## Constrained Decoding
+
+<ParamField path="use_constrained_decoding" type="boolean" default="true">
+  Use FSM-based constrained decoding for structured metadata generation.
+  
+  **When enabled:**
+  - Ensures valid JSON-like output format
+  - Prevents hallucination of invalid metadata
+  - Slightly slower LM inference
+  
+  **When disabled:**
+  - Faster LM inference
+  - Less structured output
+  - May require post-processing
+</ParamField>
+
+## Performance Tuning
+
+### Optimizing LM Speed
+
+**For fastest LM inference:**
+
+```python
+params = GenerationParams(
+    thinking=True,
+    lm_temperature=0.7,      # Lower = faster sampling
+    lm_cfg_scale=1.0,        # 1.0 = single forward pass
+    lm_top_k=40,             # Reduces sampling overhead
+    use_constrained_decoding=False,  # Disable FSM overhead
+    use_cot_caption=False,   # Skip caption rewriting
+)
+```
+
+**For best quality:**
+
+```python
+params = GenerationParams(
+    thinking=True,
+    lm_temperature=0.85,
+    lm_cfg_scale=2.0,        # CFG for better coherence
+    lm_top_p=0.9,
+    use_constrained_decoding=True,   # Structured output
+    use_cot_caption=True,    # Enhanced captions
+    use_cot_metas=True,      # Full metadata reasoning
+    use_cot_language=True,   # Language detection
+)
+```
+
+### Memory vs Speed Trade-offs
+
+| Configuration | VRAM | Speed | Quality |
+|---------------|------|-------|--------|
+| 0.6B, vllm, CFG=1.0 | 4GB | Fast | Good |
+| 1.7B, vllm, CFG=2.0 | 8GB | Medium | Better |
+| 4B, pt, CFG=2.0 | 16GB | Slow | Best |
+
+## Backend-Specific Settings
+
+### vLLM (NVIDIA GPU)
+
+```python
+# .env or environment
+ACESTEP_LM_BACKEND=vllm
+```
+
+**Advantages:**
+- Fastest inference on CUDA
+- Efficient KV-cache management
+- Automatic batching
+
+**Requirements:**
+- CUDA 11.8+
+- NVIDIA GPU with compute capability 7.0+
+
+### MLX (Apple Silicon)
+
+```python
+# .env or environment  
+ACESTEP_LM_BACKEND=mlx
+```
+
+**Advantages:**
+- Optimized for M-series chips
+- Low memory overhead
+- Native Metal acceleration
+
+**Requirements:**
+- macOS 13.5+
+- Apple Silicon (M1/M2/M3/M4)
+
+### PyTorch (Universal)
+
+```python
+# .env or environment
+ACESTEP_LM_BACKEND=pt  
+```
+
+**Advantages:**
+- Works everywhere (CPU, CUDA, ROCm, MPS, XPU)
+- Most compatible
+- Stable
+
+**Disadvantages:**
+- Slower than optimized backends
+- Higher memory usage
+
+## Debugging LM Issues
+
+Enable LM debugging in profiling:
+
+```bash
+python profile_inference.py --llm-debug --thinking
+```
+
+**Output includes:**
+- Token generation throughput (tokens/sec)
+- Phase timing (metadata vs codes)
+- Constrained decoding overhead
+- CFG overhead
+
+See [Benchmarking](/advanced/benchmark) for profiling details.
+
+## Related Resources
+
+- [Generation Parameters](/advanced/generation-parameters) — Full parameter reference
+- [Benchmarking](/advanced/benchmark) — Profiling LM performance
+- [GPU Compatibility](/concepts/gpu-compatibility) — VRAM requirements
+- [Troubleshooting](/advanced/troubleshooting) — LM initialization issues

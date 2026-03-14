@@ -1,0 +1,559 @@
+---
+title: 'Command-Line Interface'
+description: 'Interactive wizard and config-driven CLI for music generation'
+---
+
+The ACE-Step CLI provides an interactive wizard and configuration-driven interface for music generation from the command line.
+
+## Overview
+
+The CLI operates in two modes:
+
+1. **Wizard Mode** - Interactive prompts guide you through configuration
+2. **Config Mode** - Load saved `.toml` configuration files
+
+All operations save/load configurations, making it easy to reproduce results and build generation workflows.
+
+## Installation
+
+```bash
+# Install ACE-Step
+pip install acestep
+
+# Or from source
+git clone https://github.com/yourusername/ACE-Step-1.5
+cd ACE-Step-1.5
+pip install -e .
+```
+
+## Quick Start
+
+### Interactive Wizard
+
+Run the wizard with no arguments:
+
+```bash
+python cli.py
+```
+
+The wizard will guide you through:
+- Task selection
+- Model selection
+- Input configuration
+- Parameter settings
+- Generation and config saving
+
+### Load Configuration
+
+Generate from a saved config:
+
+```bash
+python cli.py --config config.toml
+```
+
+### Configure Only (No Generation)
+
+Create/edit configuration without generating:
+
+```bash
+# Create new config
+python cli.py --configure
+
+# Edit existing config
+python cli.py --configure --config config.toml
+```
+
+## CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `-c`, `--config` | Path to `.toml` configuration file to load |
+| `--configure` | Run wizard to save configuration without generating |
+| `--log-level` | Logging level: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (default: `INFO`) |
+
+## Wizard Workflow
+
+<Steps>
+  <Step title="Task Selection">
+    Choose generation task:
+    ```
+    1. text2music - Generate music from text/lyrics
+    2. cover      - Transform existing audio style
+    3. repaint    - Regenerate specific time segment
+    4. lego       - Generate specific instrument track
+    5. extract    - Isolate instrument track
+    6. complete   - Complete partial tracks
+    ```
+  </Step>
+  
+  <Step title="Model Selection">
+    Select DiT and LM models from available local models or auto-download
+  </Step>
+  
+  <Step title="Task-Specific Inputs">
+    Provide required inputs based on task type:
+    - **text2music**: Caption/lyrics or simple mode description
+    - **cover/repaint**: Source audio file
+    - **lego/extract**: Source audio + track selection
+    - **complete**: Source audio + track list
+  </Step>
+  
+  <Step title="Text Inputs">
+    For text2music:
+    - **Simple Mode**: Auto-generate caption/lyrics from description
+    - **Manual Mode**: Provide caption and/or lyrics
+  </Step>
+  
+  <Step title="Lyrics Configuration">
+    Choose lyrics mode:
+    ```
+    1. Instrumental (no lyrics)
+    2. Generate lyrics automatically
+    3. Load from .txt file
+    4. Paste lyrics directly
+    ```
+  </Step>
+  
+  <Step title="Batch Size">
+    Set number of output variations to generate (1-8)
+  </Step>
+  
+  <Step title="Advanced Parameters (Optional)">
+    Configure:
+    - Metadata (BPM, key, duration, etc.)
+    - DiT settings (steps, guidance, seed, shift, etc.)
+    - LM settings (temperature, CFG, CoT options)
+    - Output settings (format, directory)
+  </Step>
+  
+  <Step title="Review & Confirm">
+    Review summary and confirm generation
+  </Step>
+  
+  <Step title="Save Configuration">
+    Save settings to `.toml` file for reuse
+  </Step>
+</Steps>
+
+## Configuration Files
+
+The wizard saves all parameters to `.toml` files:
+
+```toml config.toml
+task_type = "text2music"
+caption = "upbeat electronic dance music"
+lyrics = "[Instrumental]"
+instrumental = true
+vocal_language = "en"
+
+bpm = 128
+keyscale = "C Major"
+timesignature = "4"
+duration = 30.0
+
+thinking = true
+lm_temperature = 0.85
+lm_cfg_scale = 2.0
+
+inference_steps = 8
+seed = -1
+shift = 3.0
+infer_method = "ode"
+
+batch_size = 2
+audio_format = "flac"
+save_dir = "output"
+
+config_path = "acestep-v15-turbo"
+lm_model_path = "acestep-5Hz-lm-0.6B"
+backend = "vllm"
+device = "cuda"
+```
+
+### Reusing Configurations
+
+Load and execute saved configs:
+
+```bash
+python cli.py --config config.toml
+```
+
+Edit existing configs:
+
+```bash
+python cli.py --configure --config config.toml
+```
+
+## Environment Variables
+
+Configure via `.env` file:
+
+```bash .env
+# Model paths
+ACESTEP_CONFIG_PATH=acestep-v15-turbo
+ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B
+
+# Device settings
+ACESTEP_DEVICE=cuda
+ACESTEP_LM_BACKEND=vllm
+
+# Performance
+ACESTEP_OFFLOAD_TO_CPU=false
+ACESTEP_USE_FLASH_ATTENTION=true
+
+# Output
+ACESTEP_AUDIO_FORMAT=flac
+ACESTEP_SAVE_DIR=output
+```
+
+CLI arguments override `.env` settings.
+
+## Task Examples
+
+### Text2Music - Simple Mode
+
+```bash
+python cli.py
+```
+
+```
+Task: 1 (text2music)
+Simple Mode: y
+Description: a soft Bengali love song for a quiet evening
+Outputs: 2
+Advanced parameters: n
+```
+
+Saves to `config.toml`, generates 2 variations.
+
+### Text2Music - Custom Mode
+
+```bash
+python cli.py
+```
+
+```
+Task: 1 (text2music)
+Simple Mode: n
+Caption: upbeat pop rock with electric guitars
+Lyrics: 4 (paste)
+[Verse 1]
+Walking down the street
+[Chorus]
+I'm moving on
+Vocal language: en
+Outputs: 2
+```
+
+### Cover (Remix)
+
+```bash
+python cli.py
+```
+
+```
+Task: 2 (cover)
+Source audio: /path/to/original.mp3
+Caption: orchestral symphonic arrangement
+Outputs: 3
+Advanced: y
+Cover strength: 0.7
+```
+
+### Repaint
+
+```bash
+python cli.py
+```
+
+```
+Task: 3 (repaint)
+Source audio: /path/to/song.mp3
+Repaint start: 10.0
+Repaint end: 20.0
+Caption: smooth piano transition
+Outputs: 1
+```
+
+### Extract (Base Model)
+
+```bash
+python cli.py
+```
+
+```
+Task: 5 (extract)
+Source audio: /path/to/mix.mp3
+Track: vocals
+```
+
+## Advanced Configuration
+
+### Custom Timesteps
+
+When configuring advanced parameters:
+
+```
+Custom timesteps: [0.97, 0.76, 0.615, 0.5, 0.395, 0.28, 0.18, 0.085, 0]
+```
+
+Or in config file:
+
+```toml
+timesteps = [0.97, 0.76, 0.615, 0.5, 0.395, 0.28, 0.18, 0.085, 0]
+```
+
+### Specific Seeds
+
+For reproducible results:
+
+```
+Random seed: n
+Seed: 42
+```
+
+Or multiple seeds:
+
+```
+Custom seeds: 42, 123, 456
+```
+
+### Model Selection
+
+The wizard shows locally available models:
+
+```
+--- Available DiT Models ---
+1. acestep-v15-turbo
+2. acestep-v15-turbo-shift3
+3. acestep-v15-base
+Choose a model [default: acestep-v15-turbo]: 2
+```
+
+```
+--- Available LM Models ---
+1. acestep-5Hz-lm-0.6B
+2. acestep-5Hz-lm-1.7B
+Choose a model [default: auto]: 1
+```
+
+## Prompt Editing (instruction.txt)
+
+When `thinking=True`, the CLI allows editing the LM prompt:
+
+### Config Mode (--config)
+
+If `instruction.txt` exists in the project root, it's used as the pre-loaded prompt:
+
+```bash
+python cli.py --config config.toml
+# Uses instruction.txt if present
+```
+
+### Wizard Mode
+
+The CLI saves the formatted prompt to `instruction.txt` and pauses:
+
+```
+--- Final Draft Saved ---
+Saved to instruction.txt
+Edit the file now. Press Enter when ready to continue.
+```
+
+Edit `instruction.txt` to fine-tune the prompt, then press Enter to continue generation.
+
+## Output
+
+Generated files are saved to the output directory:
+
+```
+output/
+├── output_0.flac
+├── output_0_meta.json
+├── output_1.flac
+└── output_1_meta.json
+```
+
+Metadata JSON includes:
+
+```json
+{
+  "prompt": "upbeat electronic dance music",
+  "lyrics": "[Instrumental]",
+  "seed": 42,
+  "bpm": 128,
+  "keyscale": "C Major",
+  "duration": 30.0,
+  "model": "acestep-v15-turbo"
+}
+```
+
+## GPU Configuration
+
+The CLI automatically detects GPU tier and optimizes settings:
+
+```
+============================================================
+GPU Configuration Detected:
+============================================================
+  GPU Memory: 23.99 GiB
+  Configuration Tier: 6
+  Max Duration (with LM): 600s (10 min)
+  Max Duration (without LM): 600s (10 min)
+  Max Batch Size (with LM): 8
+  Max Batch Size (without LM): 8
+  Default LM Init: True
+  Available LM Models: ['0.6B', '1.7B', '4B']
+============================================================
+```
+
+**Automatic Optimizations:**
+- GPUs &lt;16GB: CPU offloading enabled
+- GPUs &lt;20GB: INT8 quantization enabled
+- GPUs &lt;12GB: DiT CPU offloading enabled
+- GPUs ≤6GB: LM disabled by default
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Models not found">
+    Required models will auto-download on first use:
+    ```
+    Note: No local DiT models found. The main model will be
+    auto-downloaded during initialization.
+    ```
+    Ensure internet connection for first run.
+  </Accordion>
+  
+  <Accordion title="Out of memory">
+    The system includes automatic VRAM management:
+    - VRAM guard reduces batch size automatically
+    - Adaptive VAE decode falls back to CPU
+    - Manual fixes: reduce batch size, enable CPU offloading
+    
+    Enable manual offloading:
+    ```bash
+    python cli.py
+    # In advanced settings:
+    Enable CPU offload: y
+    ```
+  </Accordion>
+  
+  <Accordion title="LM not available">
+    On GPUs ≤6GB, LM is disabled by default:
+    ```
+    Default LM Init: False
+    ```
+    
+    You can still enable it manually in advanced settings, but
+    generation may be slower or fail due to memory constraints.
+  </Accordion>
+  
+  <Accordion title="Invalid config file">
+    Ensure config file is valid TOML:
+    ```bash
+    python -c "import toml; toml.load('config.toml')"
+    ```
+    
+    Use `--configure` to regenerate:
+    ```bash
+    python cli.py --configure --config config.toml
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Save Configurations" icon="floppy-disk">
+    Always save successful configurations for reproducibility
+  </Card>
+  
+  <Card title="Start Simple" icon="seedling">
+    Begin with wizard mode to understand parameters
+  </Card>
+  
+  <Card title="Use Config Files" icon="file">
+    Build a library of configs for different styles/tasks
+  </Card>
+  
+  <Card title="Version Configs" icon="git">
+    Track config files in version control for team workflows
+  </Card>
+</CardGroup>
+
+### Example Workflow
+
+```bash
+# 1. Create initial config via wizard
+python cli.py
+# Save as: rock_instrumental.toml
+
+# 2. Generate variations
+python cli.py --config rock_instrumental.toml
+
+# 3. Edit and regenerate
+python cli.py --configure --config rock_instrumental.toml
+# Adjust BPM, save as: rock_instrumental_v2.toml
+
+# 4. Batch process
+for config in configs/*.toml; do
+    python cli.py --config "$config"
+done
+```
+
+## Command-Line Examples
+
+### Quick Instrumental
+
+```bash
+python cli.py
+# Task: 1 (text2music)
+# Simple Mode: n
+# Caption: energetic rock instrumental
+# Lyrics: 1 (instrumental)
+# Outputs: 2
+# Advanced: n
+# Config: rock_inst.toml
+```
+
+### High-Quality Generation
+
+```bash
+python cli.py --config base_model.toml
+# (Pre-configured with:
+#   model: acestep-v15-base
+#   inference_steps: 64
+#   guidance_scale: 8.0
+#   use_adg: true
+#   audio_format: wav)
+```
+
+### Batch Cover Generation
+
+```bash
+#!/bin/bash
+for song in songs/*.mp3; do
+    python cli.py --config cover_template.toml \
+        --src-audio "$song" \
+        --save-dir "covers/$(basename "$song" .mp3)"
+done
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Python API" icon="python" href="/guides/python-api">
+    Programmatic control for advanced automation
+  </Card>
+  
+  <Card title="REST API" icon="code" href="/guides/rest-api">
+    HTTP API for remote generation
+  </Card>
+  
+  <Card title="Gradio UI" icon="window" href="/guides/gradio-ui">
+    Interactive web interface
+  </Card>
+  
+
+</CardGroup>

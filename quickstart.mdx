@@ -1,80 +1,260 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get ACE-Step 1.5 running and generate your first song in under 5 minutes
 ---
 
-## Get started in three steps
+<Steps>
+  <Step title="Install uv package manager">
+    ACE-Step uses `uv` for fast, reliable dependency management. Install it with a single command:
 
-Get your documentation site running locally and make your first customization.
+    <CodeGroup>
+      ```bash macOS / Linux
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+      ```
 
-### Step 1: Set up your local environment
+      ```powershell Windows
+      powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+      ```
+    </CodeGroup>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Tip>
+      On Windows, you can also use the [portable package](https://files.acemusic.ai/acemusic/win/ACE-Step-1.5.7z) which includes Python and all dependencies pre-installed.
+    </Tip>
+  </Step>
 
-### Step 2: Deploy your changes
+  <Step title="Clone and install ACE-Step">
+    Clone the repository and install dependencies with `uv sync`:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    <Info>
+      `uv sync` automatically installs the correct PyTorch version for your platform (CUDA 12.8 for Windows/Linux x86_64, CPU/MPS for macOS).
+    </Info>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    Installation takes 2-5 minutes depending on your internet speed. The package size is approximately 2-3GB.
+  </Step>
 
-### Step 3: Go live
+  <Step title="Launch the Gradio UI">
+    Start the web interface with a single command:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    uv run acestep
+    ```
 
-## Next steps
+    On first launch, ACE-Step will automatically download required models (~10GB total):
+    - **VAE** (Variational AutoEncoder) for audio encoding/decoding
+    - **Qwen3-Embedding-0.6B** for text embeddings
+    - **acestep-v15-turbo** (Diffusion Transformer) for audio generation
+    - **acestep-5Hz-lm-1.7B** (Language Model) for planning and metadata generation
 
-Now that you have your docs running, explore these key features:
+    <Note>
+      Model downloads are cached in `./checkpoints/`. Subsequent launches will be instant.
+    </Note>
+
+    Once models are loaded, the UI will open at **http://localhost:7860**
+  </Step>
+
+  <Step title="Generate your first song">
+    The Gradio UI provides two generation modes: **Simple Mode** and **Advanced Mode**. Let's start with Simple Mode:
+
+    ### Using Simple Mode
+
+    1. In the **Generation** tab, ensure **Simple Mode** is selected
+    2. Enter a description in the **Description** field:
+       ```
+       upbeat electronic dance music with heavy bass and energetic synths
+       ```
+    3. Choose whether you want vocals:
+       - Check **Instrumental** for instrumental-only music
+       - Or select **Vocal Language** (e.g., English) for songs with lyrics
+    4. Click **Generate**
+
+    <Info>
+      **Simple Mode** uses the Language Model to automatically generate caption, lyrics, BPM, key, and other metadata from your description. This is the fastest way to create music.
+    </Info>
+
+    ### Example Generations
+
+    <Accordion title="Try these example prompts">
+      **Pop/Rock:**
+      ```
+      a soft Bengali love song for a quiet evening
+      ```
+
+      **Electronic:**
+      ```
+      upbeat electronic dance music with heavy bass
+      ```
+
+      **Jazz:**
+      ```
+      smooth jazz piano trio with walking bass
+      ```
+
+      **Classical:**
+      ```
+      romantic piano piece in the style of Chopin
+      ```
+    </Accordion>
+
+    ### Generation Time
+
+    | Hardware | Approximate Time (30s audio) |
+    |----------|-----------------------------|
+    | A100 | Under 2 seconds |
+    | RTX 3090 | 8-10 seconds |
+    | RTX 3060 (12GB) | 15-20 seconds |
+    | CPU-only | 2-5 minutes |
+
+    <Warning>
+      On GPUs with ≤6GB VRAM, the Language Model is disabled by default to prevent out-of-memory errors. You'll need to use **Advanced Mode** and manually specify caption, lyrics, and metadata.
+    </Warning>
+  </Step>
+
+  <Step title="Download and use your music">
+    Once generation completes:
+
+    1. **Listen** — Click the play button in the audio player
+    2. **Download** — Click the download icon to save the audio file
+    3. **View metadata** — Expand the metadata section to see:
+       - Generated caption and lyrics
+       - Detected BPM, key/scale, time signature
+       - Seed value (for reproducibility)
+
+    <Tip>
+      **Save the seed value** if you want to recreate the same music later! Use it in Advanced Mode → Seed field.
+    </Tip>
+
+    ### Audio Formats
+
+    By default, ACE-Step generates 44.1kHz stereo audio in FLAC format for lossless quality. You can change the format in the UI settings or via `.env` configuration.
+  </Step>
+</Steps>
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Gradio UI Guide" icon="window" href="/guides/gradio-ui">
+    Explore all features of the web interface
+  </Card>
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Integrate ACE-Step into your own applications
+  </Card>
+  <Card title="LoRA Training" icon="brain" href="/features/lora-training">
+    Train custom models on your own music
+  </Card>
+  <Card title="Audio Editing" icon="sliders" href="/features/audio-editing">
+    Cover generation, repainting, stem separation, and more
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Models are downloading very slowly">
+    By default, ACE-Step downloads from HuggingFace. If you're in China or experiencing slow speeds, switch to ModelScope:
+
+    ```bash
+    uv run acestep --download-source modelscope
+    ```
+
+    Or set it permanently in `.env`:
+    ```bash
+    ACESTEP_DOWNLOAD_SOURCE=modelscope
+    ```
+  </Accordion>
+
+  <Accordion title="Out of memory error on GPU">
+    If you see CUDA out of memory errors:
+
+    1. **Use a smaller Language Model:**
+       ```bash
+       uv run acestep --lm_model_path acestep-5Hz-lm-0.6B
+       ```
+
+    2. **Disable the Language Model** (DiT-only mode):
+       ```bash
+       uv run acestep --init_llm false
+       ```
+
+    3. **Enable CPU offload** (automatic on GPUs with &lt;20GB VRAM):
+       ```bash
+       uv run acestep --offload_to_cpu true
+       ```
+
+    See [Installation Guide](/installation#gpu-compatibility) for detailed VRAM requirements.
+  </Accordion>
+
+  <Accordion title="UI language is not English">
+    Change the UI language:
+
+    ```bash
+    uv run acestep --language en
+    ```
+
+    Supported languages: `en`, `zh`, `he`, `ja`
+  </Accordion>
+
+  <Accordion title="Port 7860 is already in use">
+    Use a different port:
+
+    ```bash
+    uv run acestep --port 8080
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Alternative Launch Methods
+
+### Using Launch Scripts
+
+ACE-Step includes ready-to-use launch scripts that handle environment detection and auto-updates:
+
+<CodeGroup>
+  ```bash Windows
+  start_gradio_ui.bat
+  ```
+
+  ```bash Linux
+  chmod +x start_gradio_ui.sh
+  ./start_gradio_ui.sh
+  ```
+
+  ```bash macOS
+  chmod +x start_gradio_ui_macos.sh
+  ./start_gradio_ui_macos.sh
+  ```
+</CodeGroup>
+
+<Info>
+  macOS scripts automatically use the **MLX backend** for native Apple Silicon acceleration (M1/M2/M3/M4).
+</Info>
+
+### Using REST API
+
+For programmatic access, launch the REST API server instead:
+
+```bash
+uv run acestep-api
+```
+
+API will be available at **http://localhost:8001**. See [REST API Reference](/api/rest/overview) for endpoint documentation.
+
+### Using Python Directly
+
+If you prefer using your own Python environment (conda, venv, system Python):
+
+```bash
+# Activate your environment first
+conda activate myenv  # or: source venv/bin/activate
+
+# Install dependencies
+pip install -e .
+
+# Launch
+python acestep/acestep_v15_pipeline.py
+```

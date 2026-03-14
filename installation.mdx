@@ -1,0 +1,877 @@
+---
+title: Installation
+description: Complete installation guide for ACE-Step 1.5 on all platforms and hardware configurations
+---
+
+## System Requirements
+
+<Info>
+**Minimum:** Python 3.11-3.12 (stable release), 4GB VRAM (DiT-only mode with INT8 quantization + CPU offload)
+
+**Recommended:** 8GB+ VRAM for optimal performance with Language Model
+</Info>
+
+| Component | Requirement |
+|-----------|-------------|
+| **Python** | 3.11-3.12 (stable, not pre-release) |
+| **GPU** | CUDA GPU recommended; also supports MPS, ROCm, Intel XPU, CPU |
+| **VRAM** | ≥4GB for DiT-only; ≥6GB for LLM+DiT |
+| **Disk Space** | ~10GB for core models |
+| **OS** | Windows 10/11, Linux (Ubuntu 20.04+, etc.), macOS 11+ |
+
+<Warning>
+**ROCm on Windows** requires Python 3.12 specifically (AMD officially provides Python 3.12 wheels only).
+
+**Linux users:** Avoid Python 3.11.0rc1 (pre-release) — use stable 3.11.12+ to prevent segmentation faults with vLLM.
+</Warning>
+
+## Quick Installation (All Platforms)
+
+<Steps>
+  <Step title="Install uv package manager">
+    <CodeGroup>
+      ```bash macOS / Linux
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+      ```
+
+      ```powershell Windows
+      powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Clone repository">
+    ```bash
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    uv sync
+    ```
+
+    This automatically installs the correct PyTorch build for your platform:
+    - **Windows:** PyTorch 2.7.1 + CUDA 12.8
+    - **Linux x86_64:** PyTorch 2.10.0 + CUDA 12.8
+    - **Linux aarch64:** PyTorch 2.10.0 + CUDA 13.0
+    - **macOS (Apple Silicon):** PyTorch 2.9.1+ with MPS support
+  </Step>
+
+  <Step title="Launch">
+    <CodeGroup>
+      ```bash Gradio UI
+      uv run acestep
+      ```
+
+      ```bash REST API
+      uv run acestep-api
+      ```
+    </CodeGroup>
+
+    Open http://localhost:7860 (Gradio) or http://localhost:8001 (API)
+  </Step>
+</Steps>
+
+Models download automatically on first run. Continue reading for platform-specific installations and advanced configurations.
+
+---
+
+## Platform-Specific Installation
+
+### Windows
+
+#### Option 1: Portable Package (Recommended for Beginners)
+
+<Note>
+The portable package includes Python 3.11 embedded with all dependencies pre-installed. No separate Python installation required.
+</Note>
+
+<Steps>
+  <Step title="Download and extract">
+    Download [ACE-Step-1.5.7z](https://files.acemusic.ai/acemusic/win/ACE-Step-1.5.7z) and extract to your preferred location.
+
+    **Requirements:** CUDA 12.8 compatible GPU (NVIDIA GTX 10 series or newer)
+  </Step>
+
+  <Step title="Launch">
+    Double-click one of the launch scripts:
+    - `start_gradio_ui.bat` — Launch Gradio Web UI
+    - `start_api_server.bat` — Launch REST API Server
+
+    The scripts will:
+    - Auto-detect environment (portable Python or uv)
+    - Check for updates (optional, configurable)
+    - Download models on first run
+    - Launch the service
+  </Step>
+</Steps>
+
+#### Option 2: Standard Installation
+
+<Steps>
+  <Step title="Install Python 3.11 or 3.12">
+    Download from [python.org](https://www.python.org/downloads/) and install.
+
+    <Warning>
+    Check **Add Python to PATH** during installation!
+    </Warning>
+  </Step>
+
+  <Step title="Install uv">
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+  </Step>
+
+  <Step title="Clone and install">
+    ```bash
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+    ```
+  </Step>
+
+  <Step title="Launch">
+    ```bash
+    uv run acestep
+    ```
+  </Step>
+</Steps>
+
+### Linux
+
+<Tabs>
+  <Tab title="Ubuntu / Debian">
+    ```bash
+    # Install Python 3.11+ (if not already installed)
+    sudo apt update
+    sudo apt install python3.11 python3.11-venv git
+
+    # Install uv
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    # Clone and install
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+
+    # Launch
+    uv run acestep
+    ```
+
+    <Note>
+    On Ubuntu, use the [deadsnakes PPA](https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa) for stable Python 3.11+ if the default version is pre-release (3.11.0rc1).
+    </Note>
+  </Tab>
+
+  <Tab title="Fedora / RHEL">
+    ```bash
+    # Install Python 3.11+ and git
+    sudo dnf install python3.11 git
+
+    # Install uv
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    # Clone and install
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+
+    # Launch
+    uv run acestep
+    ```
+  </Tab>
+
+  <Tab title="Arch Linux">
+    ```bash
+    # Install Python 3.11+ and git
+    sudo pacman -S python git
+
+    # Install uv
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    # Clone and install
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+
+    # Launch
+    uv run acestep
+    ```
+  </Tab>
+</Tabs>
+
+#### Using Launch Scripts
+
+```bash
+# Make executable (first time only)
+chmod +x start_gradio_ui.sh start_api_server.sh
+
+# Launch Gradio UI
+./start_gradio_ui.sh
+
+# Or launch API server
+./start_api_server.sh
+```
+
+### macOS (Apple Silicon)
+
+<Info>
+macOS scripts automatically use the **MLX backend** for native Apple Silicon acceleration on M1/M2/M3/M4 chips.
+</Info>
+
+<Steps>
+  <Step title="Install Xcode Command Line Tools">
+    ```bash
+    xcode-select --install
+    ```
+  </Step>
+
+  <Step title="Install uv">
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+  </Step>
+
+  <Step title="Clone and install">
+    ```bash
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+    ```
+
+    This installs macOS-specific dependencies:
+    - PyTorch with MPS (Metal Performance Shaders) support
+    - MLX (Apple's ML framework) ≥0.25.2
+    - MLX-LM ≥0.20.0
+  </Step>
+
+  <Step title="Launch with MLX backend">
+    ```bash
+    # Using launcher script (recommended)
+    chmod +x start_gradio_ui_macos.sh
+    ./start_gradio_ui_macos.sh
+
+    # Or manually with uv
+    uv run acestep
+    ```
+
+    The macOS launcher automatically sets `ACESTEP_LM_BACKEND=mlx` for optimal performance.
+  </Step>
+</Steps>
+
+---
+
+## Hardware-Specific Configuration
+
+### NVIDIA CUDA GPUs
+
+<Info>
+CUDA support is included by default on Windows and Linux. No additional setup required.
+</Info>
+
+**Supported CUDA versions:**
+- Windows: CUDA 12.8
+- Linux x86_64: CUDA 12.8
+- Linux aarch64 (NVIDIA Grace/DGX): CUDA 13.0
+
+**Tested GPUs:**
+- RTX 40 series (4090, 4080, 4070, etc.)
+- RTX 30 series (3090, 3080, 3070, 3060, etc.)
+- RTX 20 series (2080 Ti, 2070, etc.)
+- GTX 10 series (1080 Ti, 1070, etc.)
+- A100, A6000, V100 (datacenter)
+
+### AMD ROCm GPUs
+
+#### Windows (ROCm 7.2)
+
+<Warning>
+**Python 3.12 is required** for ROCm on Windows. AMD officially provides Python 3.12 wheels only.
+</Warning>
+
+<Steps>
+  <Step title="Install Python 3.12">
+    Download Python 3.12 from [python.org](https://www.python.org/downloads/)
+
+    ```bash
+    python --version  # Should show Python 3.12.x
+    ```
+  </Step>
+
+  <Step title="Create ROCm virtual environment">
+    ```bash
+    python -m venv venv_rocm
+    venv_rocm\Scripts\activate
+    ```
+  </Step>
+
+  <Step title="Install ROCm dependencies">
+    Follow the detailed steps in `requirements-rocm.txt`:
+
+    ```bash
+    pip install -r requirements-rocm.txt
+    ```
+
+    This installs:
+    - ROCm SDK 7.2
+    - PyTorch ROCm wheels from AMD's repository
+    - ACE-Step dependencies
+  </Step>
+
+  <Step title="Launch with ROCm script">
+    ```bash
+    start_gradio_ui_rocm.bat
+    ```
+
+    The ROCm launcher automatically sets:
+    - `HSA_OVERRIDE_GFX_VERSION` (for RDNA3 GPUs)
+    - `ACESTEP_LM_BACKEND=pt` (vLLM not supported on ROCm)
+    - `MIOPEN_FIND_MODE=FAST`
+  </Step>
+</Steps>
+
+#### Linux (ROCm 6.0+)
+
+<Steps>
+  <Step title="Install ROCm drivers">
+    Follow [AMD's official ROCm installation guide](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html) for your distribution.
+
+    Verify installation:
+    ```bash
+    rocm-smi  # Should list your GPU
+    ```
+  </Step>
+
+  <Step title="Create virtual environment">
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate
+    ```
+  </Step>
+
+  <Step title="Install PyTorch with ROCm">
+    ```bash
+    pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
+    ```
+  </Step>
+
+  <Step title="Install ACE-Step">
+    ```bash
+    pip install -e .
+    ```
+  </Step>
+
+  <Step title="Launch">
+    ```bash
+    python -m acestep.acestep_v15_pipeline --port 7860
+    ```
+  </Step>
+</Steps>
+
+#### RDNA3 GPU Support (RX 7000 series)
+
+RDNA3 GPUs require the `HSA_OVERRIDE_GFX_VERSION` environment variable:
+
+| GPU Model | HSA_OVERRIDE_GFX_VERSION |
+|-----------|-------------------------|
+| RX 7900 XT/XTX, RX 9070 XT | `11.0.0` |
+| RX 7800 XT, RX 7700 XT | `11.0.1` |
+| RX 7600 | `11.0.2` |
+
+**On Windows:** The `start_gradio_ui_rocm.bat` script sets this automatically.
+
+**On Linux:** Export before launching:
+```bash
+export HSA_OVERRIDE_GFX_VERSION=11.0.0  # For RX 7900 XT/XTX
+python -m acestep.acestep_v15_pipeline
+```
+
+<Tip>
+Run `python scripts/check_gpu.py` to diagnose GPU detection issues.
+</Tip>
+
+### Intel GPUs (XPU)
+
+<Info>
+**Tested:** Windows laptop with Intel Ultra 9 285H integrated graphics
+
+**Status:** Supported for inference only (LoRA training not recommended)
+</Info>
+
+<Steps>
+  <Step title="Install Intel Extension for PyTorch">
+    Download from [Intel's website](https://pytorch-extension.intel.com/?request=platform)
+
+    Install PyTorch 2.8.0+ with Intel XPU support
+  </Step>
+
+  <Step title="Install ACE-Step">
+    ```bash
+    git clone https://github.com/ACE-Step/ACE-Step-1.5.git
+    cd ACE-Step-1.5
+    uv sync
+    ```
+  </Step>
+
+  <Step title="Launch">
+    ```bash
+    uv run acestep --lm_model_path acestep-5Hz-lm-0.6B
+    ```
+  </Step>
+</Steps>
+
+**Limitations:**
+- nanovllm acceleration NOT supported on Intel GPUs (use `--backend pt`)
+- LLM inference may slow down for audio >2 minutes
+- Compile & quantization enabled by default
+- CPU offload disabled by default
+
+### CPU-Only Mode
+
+<Warning>
+CPU inference is **significantly slower** than GPU (2-5 minutes per 30s audio). Training on CPU is not recommended.
+</Warning>
+
+ACE-Step can run on CPU for inference:
+
+```bash
+uv run acestep --device cpu --init_llm false
+```
+
+For better CPU performance:
+- Use DiT-only mode (`--init_llm false`) to reduce memory usage
+- Reduce batch size to 1
+- Generate shorter audio clips (10-30 seconds)
+
+---
+
+## GPU Compatibility & Model Selection
+
+### Which Model Should I Choose?
+
+ACE-Step automatically adapts to your GPU's VRAM and configures optimal settings:
+
+| Your GPU VRAM | Recommended LM Model | Backend | Notes |
+|---------------|---------------------|---------|-------|
+| **≤6GB** | None (DiT only) | — | LM disabled; INT8 quantization + CPU offload |
+| **6-8GB** | `acestep-5Hz-lm-0.6B` | `pt` | Lightweight LM with PyTorch backend |
+| **8-16GB** | `0.6B` / `1.7B` | `vllm` | 0.6B for 8-12GB, 1.7B for 12-16GB |
+| **16-24GB** | `acestep-5Hz-lm-1.7B` | `vllm` | 4B available on 20GB+; no offload |
+| **≥24GB** | `acestep-5Hz-lm-4B` | `vllm` | Best quality, all models fit |
+
+### DiT Models
+
+| Model | Inference Steps | CFG | Best For |
+|-------|----------------|-----|----------|
+| `acestep-v15-turbo` | 8 | ❌ | **Default** — Best quality/speed balance |
+| `acestep-v15-sft` | 50 | ✅ | High quality, supervised fine-tuned |
+| `acestep-v15-base` | 50 | ✅ | Maximum versatility, easy fine-tuning |
+| `acestep-v15-turbo-shift1` | 8 | ❌ | Experimental turbo variant |
+| `acestep-v15-turbo-shift3` | 8 | ❌ | Experimental turbo variant |
+
+### LM Models
+
+| Model | Parameters | Quality | VRAM Usage |
+|-------|-----------|---------|------------|
+| `acestep-5Hz-lm-0.6B` | 0.6B | Good | ~2GB |
+| `acestep-5Hz-lm-1.7B` | 1.7B | Better | ~5GB |
+| `acestep-5Hz-lm-4B` | 4B | Best | ~12GB |
+
+All LM models support:
+- Chain-of-Thought metadata generation
+- Query rewriting and expansion
+- Audio understanding (caption, BPM, key detection)
+- Multi-language lyrics generation
+
+---
+
+## Configuration
+
+### Environment Variables (.env)
+
+Create a `.env` file to persist your configuration across updates:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` to customize:
+
+```bash
+# Model paths
+ACESTEP_CONFIG_PATH=acestep-v15-turbo
+ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-1.7B
+
+# LLM initialization (auto, true, false)
+ACESTEP_INIT_LLM=auto
+
+# Backend (vllm, pt, mlx)
+ACESTEP_LM_BACKEND=vllm
+
+# Download source (auto, huggingface, modelscope)
+ACESTEP_DOWNLOAD_SOURCE=auto
+
+# Server settings
+PORT=7860
+SERVER_NAME=127.0.0.1
+LANGUAGE=en
+
+# API authentication (optional)
+ACESTEP_API_KEY=sk-your-secret-key
+```
+
+<Info>
+`.env` settings are used by Python scripts AND launcher scripts. Changes survive repository updates.
+</Info>
+
+### Command-Line Options
+
+#### Gradio UI (`uv run acestep`)
+
+```bash
+uv run acestep \
+  --port 7860 \
+  --server-name 127.0.0.1 \
+  --language en \
+  --config_path acestep-v15-turbo \
+  --lm_model_path acestep-5Hz-lm-1.7B \
+  --init_llm auto \
+  --backend vllm \
+  --download-source auto
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--port` | 7860 | Server port |
+| `--server-name` | 127.0.0.1 | Server address (`0.0.0.0` for network access) |
+| `--language` | en | UI language: `en`, `zh`, `he`, `ja` |
+| `--config_path` | auto | DiT model name |
+| `--lm_model_path` | auto | LM model name |
+| `--init_llm` | auto | LLM init: `auto`, `true`, `false` |
+| `--backend` | auto | LM backend: `vllm`, `pt`, `mlx` |
+| `--offload_to_cpu` | auto | CPU offload (auto-enabled if VRAM &lt;20GB) |
+| `--batch_size` | auto | Default batch size (1 to GPU max) |
+| `--share` | false | Create public Gradio link |
+| `--download-source` | auto | `auto`, `huggingface`, `modelscope` |
+| `--enable-api` | false | Enable REST API alongside Gradio |
+| `--api-key` | none | API authentication key |
+
+**Examples:**
+
+```bash
+# Public access with Chinese UI
+uv run acestep --server-name 0.0.0.0 --share --language zh
+
+# Force small LM on low VRAM GPU
+uv run acestep --lm_model_path acestep-5Hz-lm-0.6B --backend pt
+
+# DiT-only mode (no LLM)
+uv run acestep --init_llm false
+
+# Use ModelScope for downloads (faster in China)
+uv run acestep --download-source modelscope
+```
+
+#### REST API (`uv run acestep-api`)
+
+```bash
+uv run acestep-api \
+  --port 8001 \
+  --host 127.0.0.1 \
+  --api-key sk-your-secret-key
+```
+
+---
+
+## Model Download
+
+Models are automatically downloaded from [HuggingFace](https://huggingface.co/ACE-Step/Ace-Step1.5) or [ModelScope](https://modelscope.cn/organization/ACE-Step) on first run.
+
+### Using the CLI Downloader
+
+```bash
+# Download main model (vae, embeddings, turbo DiT, 1.7B LM)
+uv run acestep-download
+
+# Download all models
+uv run acestep-download --all
+
+# Download from ModelScope (faster in China)
+uv run acestep-download --download-source modelscope
+
+# Download specific model
+uv run acestep-download --model acestep-5Hz-lm-4B
+
+# List all available models
+uv run acestep-download --list
+```
+
+### Manual Download (huggingface-cli)
+
+```bash
+pip install huggingface-hub[cli]
+
+# Main model
+huggingface-cli download ACE-Step/Ace-Step1.5 --local-dir ./checkpoints
+
+# Optional models
+huggingface-cli download ACE-Step/acestep-5Hz-lm-0.6B --local-dir ./checkpoints/acestep-5Hz-lm-0.6B
+huggingface-cli download ACE-Step/acestep-5Hz-lm-4B --local-dir ./checkpoints/acestep-5Hz-lm-4B
+huggingface-cli download ACE-Step/acestep-v15-base --local-dir ./checkpoints/acestep-v15-base
+huggingface-cli download ACE-Step/acestep-v15-sft --local-dir ./checkpoints/acestep-v15-sft
+```
+
+### Available Models
+
+| Model | Size | HuggingFace |
+|-------|------|-------------|
+| **Ace-Step1.5** (Main) | ~10GB | [Link](https://huggingface.co/ACE-Step/Ace-Step1.5) |
+| acestep-5Hz-lm-0.6B | ~1GB | [Link](https://huggingface.co/ACE-Step/acestep-5Hz-lm-0.6B) |
+| acestep-5Hz-lm-4B | ~8GB | [Link](https://huggingface.co/ACE-Step/acestep-5Hz-lm-4B) |
+| acestep-v15-base | ~3GB | [Link](https://huggingface.co/ACE-Step/acestep-v15-base) |
+| acestep-v15-sft | ~3GB | [Link](https://huggingface.co/ACE-Step/acestep-v15-sft) |
+| acestep-v15-turbo-shift1 | ~3GB | [Link](https://huggingface.co/ACE-Step/acestep-v15-turbo-shift1) |
+
+---
+
+## Launch Scripts
+
+ACE-Step includes ready-to-use launch scripts with auto environment detection, update checking, and dependency installation:
+
+### Windows
+
+| Script | Description |
+|--------|-------------|
+| `start_gradio_ui.bat` | Launch Gradio UI (CUDA) |
+| `start_api_server.bat` | Launch REST API (CUDA) |
+| `start_gradio_ui_rocm.bat` | Launch Gradio UI (AMD ROCm) |
+| `start_api_server_rocm.bat` | Launch REST API (AMD ROCm) |
+| `check_update.bat` | Check and update from GitHub |
+| `install_uv.bat` | Install uv package manager |
+| `quick_test.bat` | Test environment setup |
+
+### Linux
+
+| Script | Description |
+|--------|-------------|
+| `start_gradio_ui.sh` | Launch Gradio UI (CUDA) |
+| `start_api_server.sh` | Launch REST API (CUDA) |
+| `start_gradio_ui_rocm.sh` | Launch Gradio UI (ROCm) |
+| `check_update.sh` | Check and update from GitHub |
+| `install_uv.sh` | Install uv package manager |
+| `quick_test.sh` | Test environment setup |
+
+### macOS
+
+| Script | Description |
+|--------|-------------|
+| `start_gradio_ui_macos.sh` | Launch Gradio UI (MLX) |
+| `start_api_server_macos.sh` | Launch REST API (MLX) |
+| `check_update.sh` | Check and update from GitHub |
+| `install_uv.sh` | Install uv package manager |
+
+### Script Configuration
+
+**Option 1: Edit launch script variables** (gets overwritten on updates)
+
+Open the script in a text editor and modify variables:
+
+```bash
+# In start_gradio_ui.bat (Windows)
+set LANGUAGE=zh
+set LM_MODEL_PATH=--lm_model_path acestep-5Hz-lm-1.7B
+```
+
+```bash
+# In start_gradio_ui.sh (Linux/macOS)
+LANGUAGE="zh"
+LM_MODEL_PATH="--lm_model_path acestep-5Hz-lm-1.7B"
+```
+
+**Option 2: Use .env file** (survives updates — recommended)
+
+Create `.env` from template and edit:
+
+```bash
+cp .env.example .env
+# Edit .env with your settings
+```
+
+Launcher scripts automatically load `.env` and use those values.
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Out of memory (OOM) errors">
+    **Solutions:**
+
+    1. **Use a smaller Language Model:**
+       ```bash
+       uv run acestep --lm_model_path acestep-5Hz-lm-0.6B
+       ```
+
+    2. **Disable Language Model** (DiT-only mode):
+       ```bash
+       uv run acestep --init_llm false
+       ```
+
+    3. **Enable CPU offload** (automatic on &lt;20GB VRAM):
+       ```bash
+       uv run acestep --offload_to_cpu true
+       ```
+
+    4. **Use PyTorch backend instead of vLLM:**
+       ```bash
+       uv run acestep --backend pt
+       ```
+
+    5. **Reduce batch size:**
+       ```bash
+       uv run acestep --batch_size 1
+       ```
+  </Accordion>
+
+  <Accordion title="AMD GPU not detected (Windows)">
+    **Check ROCm installation:**
+
+    1. Verify Python version:
+       ```bash
+       python --version  # Must be 3.12.x for ROCm on Windows
+       ```
+
+    2. Run GPU diagnostic:
+       ```bash
+       python scripts/check_gpu.py
+       ```
+
+    3. For RDNA3 GPUs, the ROCm launcher sets `HSA_OVERRIDE_GFX_VERSION` automatically. Manual override:
+       ```bash
+       # RX 7900 XT/XTX
+       set HSA_OVERRIDE_GFX_VERSION=11.0.0
+       ```
+
+    4. Use the ROCm-specific launcher:
+       ```bash
+       start_gradio_ui_rocm.bat
+       ```
+  </Accordion>
+
+  <Accordion title="Slow model downloads">
+    **Switch to ModelScope (faster in China/Asia):**
+
+    ```bash
+    uv run acestep --download-source modelscope
+    ```
+
+    Or set permanently in `.env`:
+    ```bash
+    ACESTEP_DOWNLOAD_SOURCE=modelscope
+    ```
+  </Accordion>
+
+  <Accordion title="Python 3.11.0rc1 segmentation fault (Linux)">
+    Some Linux distributions ship Python 3.11.0rc1 (pre-release) which causes segfaults with vLLM.
+
+    **Solutions:**
+
+    1. **Upgrade to stable Python 3.11.12+:**
+       ```bash
+       # Ubuntu/Debian
+       sudo add-apt-repository ppa:deadsnakes/ppa
+       sudo apt update
+       sudo apt install python3.11
+       ```
+
+    2. **Use PyTorch backend instead:**
+       ```bash
+       uv run acestep --backend pt
+       ```
+  </Accordion>
+
+  <Accordion title="Port already in use">
+    Change the port:
+
+    ```bash
+    uv run acestep --port 8080
+    ```
+
+    Or in `.env`:
+    ```bash
+    PORT=8080
+    ```
+  </Accordion>
+
+  <Accordion title="Network access denied">
+    To allow access from other devices on your network:
+
+    ```bash
+    uv run acestep --server-name 0.0.0.0
+    ```
+
+    <Warning>
+    This exposes the service to your local network. Use `--auth-username` and `--auth-password` for security:
+    ```bash
+    uv run acestep --server-name 0.0.0.0 --auth-username admin --auth-password secret
+    ```
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Intel GPU not detected">
+    1. Verify Intel Extension for PyTorch is installed:
+       ```bash
+       python -c "import intel_extension_for_pytorch as ipex; print(ipex.__version__)"
+       ```
+
+    2. Check XPU availability:
+       ```bash
+       python scripts/check_gpu.py
+       ```
+
+    3. Explicitly specify device:
+       ```bash
+       uv run acestep --device xpu
+       ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Generate your first song in 5 minutes
+  </Card>
+  <Card title="Gradio UI Guide" icon="window" href="/guides/gradio-ui">
+    Learn all features of the web interface
+  </Card>
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Integrate ACE-Step into your applications
+  </Card>
+  <Card title="LoRA Training" icon="brain" href="/features/lora-training">
+    Train custom models on your music
+  </Card>
+</CardGroup>
+
+## Development
+
+For developers contributing to ACE-Step:
+
+```bash
+# Add dependencies
+uv add package-name
+uv add --dev package-name
+
+# Update all dependencies
+uv sync --upgrade
+
+# Run tests
+uv run python -m unittest discover -s . -p "*_test.py"
+```
+
+See [AGENTS.md](https://github.com/ace-step/ACE-Step-1.5/blob/main/AGENTS.md) for contribution guidelines.

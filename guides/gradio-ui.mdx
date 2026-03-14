@@ -1,0 +1,430 @@
+---
+title: 'Gradio Web Interface'
+description: 'Interactive web UI for music generation, training, and experimentation'
+---
+
+The Gradio web interface provides a complete visual environment for ACE-Step 1.5, featuring music generation, LoRA training, and advanced parameter control.
+
+## Launching the Interface
+
+### Basic Launch
+
+```bash
+python app.py
+```
+
+The interface will start on `http://localhost:7860` by default.
+
+### Advanced Launch Options
+
+```bash
+# Pre-initialize with specific model
+python app.py --config acestep-v15-turbo --init-llm
+
+# Use custom port
+python app.py --port 7860
+
+# Specify device
+python app.py --device cuda
+
+# Enable CPU offloading for low VRAM
+python app.py --offload-to-cpu
+```
+
+<Tip>
+The system automatically detects your GPU tier and optimizes settings. On GPUs with &lt;16GB VRAM, offloading is enabled by default.
+</Tip>
+
+## Interface Overview
+
+The Gradio interface consists of several main sections:
+
+### 1. Service Configuration (Settings Accordion)
+
+Collapsed by default, this section controls:
+- **Model Selection** - Choose DiT model (turbo/base variants)
+- **Device Settings** - GPU/CPU configuration
+- **5Hz LM Configuration** - Language model selection and backend
+- **Performance Options** - Flash attention, offloading, quantization
+- **LoRA Adapter** - Load and manage LoRA adapters
+
+### 2. Generation Tab
+
+Main workspace with multiple generation modes:
+- **Simple Mode** - Natural language descriptions → music
+- **Custom Mode** - Full parameter control (text2music)
+- **Remix Mode** - Transform existing audio
+- **Repaint Mode** - Regenerate specific segments
+- **Extract Mode** - Isolate instrument tracks (base model)
+- **Lego Mode** - Add instrument tracks (base model)
+- **Complete Mode** - Auto-arrange partial tracks (base model)
+
+### 3. Results Section
+
+Displays generated audio with:
+- Audio players for each output
+- Quality scoring
+- Lyrics timestamps (LRC)
+- Batch navigation
+- Parameter restoration
+
+### 4. Training Tab
+
+Dataset building and LoRA training tools:
+- **Dataset Builder** - Scan, label, and prepare training data
+- **Train LoRA** - Fine-tune the model on custom data
+
+## Generation Modes
+
+### Simple Mode
+
+<Steps>
+  <Step title="Select Simple Mode">
+    Choose "Simple" from the Generation Mode radio selector
+  </Step>
+  
+  <Step title="Describe Your Music">
+    Enter a natural language description:
+    ```
+    a soft Bengali love song for a quiet evening
+    ```
+  </Step>
+  
+  <Step title="Create Sample">
+    Click **Create Sample** to auto-generate caption, lyrics, and metadata
+  </Step>
+  
+  <Step title="Generate">
+    Review the generated content and click **Generate Music**
+  </Step>
+</Steps>
+
+**Example Descriptions:**
+- "upbeat electronic dance music with heavy bass drops"
+- "melancholic indie folk with acoustic guitar"
+- "jazz trio playing in a smoky bar"
+
+<Tip>
+Use the 🎲 button to load random example descriptions for inspiration.
+</Tip>
+
+### Custom Mode (Text2Music)
+
+Provides full control over all generation parameters:
+
+```yaml
+Inputs:
+  Caption: "upbeat pop rock with electric guitars, driving drums"
+  Lyrics: |
+    [Verse 1]
+    Walking down the street today
+    Thinking of the words you used to say
+    
+    [Chorus]
+    I'm moving on, I'm staying strong
+    This is where I belong
+  
+  Reference Audio: (optional) path/to/style_reference.mp3
+  
+Metadata:
+  BPM: 120
+  Key Scale: "C Major"
+  Time Signature: 4/4
+  Duration: 45 seconds
+  Vocal Language: en
+```
+
+**Format Button:** Enhance caption and lyrics using the 5Hz LM before generation.
+
+### Remix Mode
+
+Transform existing audio while maintaining melodic structure:
+
+<CodeGroup>
+```yaml Style Transfer
+Source Audio: original_pop_song.mp3
+Caption: "orchestral symphonic arrangement"
+Remix Strength: 0.7
+```
+
+```yaml Genre Change
+Source Audio: acoustic_folk.mp3
+Caption: "electronic synthwave version"
+Remix Strength: 0.5
+```
+</CodeGroup>
+
+**Remix Strength:**
+- `1.0` - Strong adherence to original structure
+- `0.5` - Balanced transformation  
+- `0.2` - Loose interpretation (style transfer)
+
+### Repaint Mode
+
+Regenerate specific time segments:
+
+```yaml
+Source Audio: full_song.mp3
+Repainting Start: 10.0  # seconds
+Repainting End: 20.0    # seconds (-1 for end of file)
+Caption: "smooth transition with piano solo"
+```
+
+**Use Cases:**
+- Fix problematic sections
+- Add variations to parts of a song  
+- Create smooth transitions
+- Extend songs by repainting the end
+
+### Extract Mode (Base Model)
+
+Isolate specific instrument tracks from mixed audio:
+
+```yaml
+Source Audio: full_mix.mp3
+Track Name: vocals
+```
+
+**Available Tracks:**
+vocals, backing_vocals, drums, bass, guitar, keyboard, percussion, strings, synth, fx, brass, woodwinds
+
+### Lego Mode (Base Model)
+
+Add new instrument tracks to existing audio:
+
+```yaml
+Source Audio: backing_track.mp3
+Track Name: guitar
+Caption: "lead guitar melody with bluesy feel"
+```
+
+### Complete Mode (Base Model)
+
+Auto-complete partial tracks with multiple instruments:
+
+```yaml
+Source Audio: incomplete_track.mp3
+Track Names: [drums, bass, guitar]
+Caption: "rock style completion"
+```
+
+## Advanced Settings
+
+### DiT Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Inference Steps | 8 | Denoising steps (8 for turbo, 32-64 for base) |
+| Guidance Scale | 7.0 | CFG strength (base model only) |
+| Seed | -1 | Random seed (-1 for random) |
+| Shift | 3.0 | Timestep shift factor (recommended for turbo) |
+| Inference Method | ode | ode (Euler) or sde (stochastic) |
+| Custom Timesteps | - | Override with custom schedule |
+
+### LM Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| LM Temperature | 0.85 | Sampling temperature (higher = more creative) |
+| LM CFG Scale | 2.0 | Guidance strength |
+| LM Top-K | 0 | Top-K sampling (0 disables) |
+| LM Top-P | 0.9 | Nucleus sampling |
+
+### CoT (Chain-of-Thought) Options
+
+<AccordionGroup>
+  <Accordion title="CoT Metas">
+    Generate metadata (BPM, key, duration) via LM reasoning. Enabled by default.
+  </Accordion>
+  
+  <Accordion title="CoT Language">
+    Detect vocal language automatically. Enabled by default.
+  </Accordion>
+  
+  <Accordion title="CoT Caption">
+    Enhance and refine input captions. Enabled by default.
+  </Accordion>
+</AccordionGroup>
+
+### Generation Options
+
+- **LM Codes Strength** (0.0-1.0) - How strongly LM codes influence generation
+- **Auto Score** - Automatically calculate quality scores
+- **Auto LRC** - Generate lyrics timestamps
+- **Think** - Enable 5Hz LM for code generation
+- **ParallelThinking** - Batch process LM operations
+- **CaptionRewrite** - Let LM enhance captions
+- **AutoGen** - Auto-start next batch after completion
+
+## Results & Output
+
+### Audio Players
+
+Each generated sample includes:
+- **Play/Download** - Listen and save audio
+- **Send To Src** - Use as source for further processing
+- **Save** - Export audio + metadata to JSON
+- **Score** - Calculate quality metric
+- **LRC** - Generate lyrics timestamps
+
+### Batch Navigation
+
+Navigate between multiple generation batches:
+```
+◀ Previous | Batch 1 / 3 | Next ▶
+```
+
+**Restore Parameters:** Click "Apply These Settings to UI" to restore generation parameters from current batch.
+
+## LoRA Training
+
+<Note>
+For complete training walkthrough, see the [LoRA Training Tutorial](/features/lora-training) documentation.
+</Note>
+
+### Dataset Builder
+
+<Steps>
+  <Step title="Scan or Load">
+    Load existing dataset JSON or scan new audio directory
+  </Step>
+  
+  <Step title="Configure Dataset">
+    - Set dataset name
+    - Mark as instrumental if applicable
+    - Set custom activation tag
+    - Choose tag position (prepend/append/replace)
+  </Step>
+  
+  <Step title="Auto-Label">
+    Generate metadata for all files (caption, BPM, key, time signature)
+  </Step>
+  
+  <Step title="Review & Edit">
+    Preview and manually edit samples as needed
+  </Step>
+  
+  <Step title="Save & Preprocess">
+    Save dataset JSON and preprocess to tensors for training
+  </Step>
+</Steps>
+
+### Train LoRA
+
+**LoRA Settings:**
+- **Rank (r)**: 64 (capacity, higher = more capacity/memory)
+- **Alpha**: 128 (typically 2x rank)
+- **Dropout**: 0.1 (regularization)
+
+**Training Parameters:**
+- **Learning Rate**: 1e-4
+- **Max Epochs**: 500
+- **Batch Size**: 1
+- **Gradient Accumulation**: 1
+- **Save Frequency**: Every 200 epochs
+
+<Warning>
+LoRA adapters cannot be loaded on quantized models. Disable INT8 quantization before loading LoRA.
+</Warning>
+
+## Tips & Best Practices
+
+### For Best Quality
+
+<CardGroup cols={2}>
+  <Card title="Enable Thinking Mode" icon="brain">
+    Keep "Think" checkbox enabled for LM-enhanced generation
+  </Card>
+  
+  <Card title="Be Specific" icon="pencil">
+    Include genre, instruments, mood, and style in captions
+  </Card>
+  
+  <Card title="Use Batch Generation" icon="layer-group">
+    Generate 2-4 variations and pick the best
+  </Card>
+  
+  <Card title="Auto-Detect Metadata" icon="magic">
+    Leave BPM/Key/Duration empty for LM auto-detection
+  </Card>
+</CardGroup>
+
+### For Faster Generation
+
+- Use turbo model (`acestep-v15-turbo`)
+- Keep inference steps at 8
+- Reduce batch size
+- Disable AutoGen for manual control
+
+### For Consistent Results
+
+- Set specific seed (uncheck "Random Seed")
+- Use "Save" to export parameters
+- Use "Apply These Settings" to restore from good batches
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No Audio Generated">
+    - Check model initialization status (green message)
+    - Ensure 5Hz LM is initialized if using thinking mode
+    - Review status output for error messages
+  </Accordion>
+  
+  <Accordion title="Poor Quality Results">
+    - Increase inference steps (for base model)
+    - Adjust guidance scale (7.0-9.0 range)
+    - Try different seeds
+    - Make caption more specific
+  </Accordion>
+  
+  <Accordion title="Out of Memory">
+    The system includes automatic VRAM management:
+    - VRAM guard reduces batch size automatically
+    - Adaptive VAE decode falls back to CPU
+    - Manual fixes: reduce batch size, enable offloading, enable INT8 quantization
+  </Accordion>
+  
+  <Accordion title="LM Not Working">
+    - Ensure "Initialize 5Hz LM" was checked (disabled on GPUs ≤6GB)
+    - Verify LM model path is selected
+    - Check vllm or PyTorch backend availability
+    - Note: vllm restricted on GPUs &lt;8GB
+  </Accordion>
+</AccordionGroup>
+
+## Keyboard Shortcuts
+
+Standard web shortcuts work:
+- **Tab** - Navigate between fields
+- **Enter** - Submit text inputs
+- **Space** - Toggle checkboxes
+
+## Language Support
+
+The interface supports multiple UI languages:
+- English (en)
+- Chinese (zh) 
+- Japanese (ja)
+
+Select your preferred language in Service Configuration.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="REST API" icon="code" href="/guides/rest-api">
+    Integrate music generation into your applications
+  </Card>
+  
+  <Card title="Python API" icon="python" href="/guides/python-api">
+    Programmatic control for advanced workflows
+  </Card>
+  
+  <Card title="CLI" icon="terminal" href="/guides/cli">
+    Command-line interface for scripting
+  </Card>
+  
+  <Card title="LoRA Training" icon="graduation-cap" href="/features/lora-training">
+    Train custom style adapters
+  </Card>
+</CardGroup>

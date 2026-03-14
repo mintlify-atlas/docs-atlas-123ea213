@@ -1,0 +1,541 @@
+---
+title: 'Troubleshooting'
+description: 'Common issues and solutions for ACE-Step 1.5'
+icon: 'wrench'
+---
+
+## GPU Detection Issues
+
+<Accordion title="No GPU detected, running on CPU" icon="triangle-exclamation">
+  
+### Quick Diagnostic
+
+Run the diagnostic tool to identify your issue:
+
+```bash
+python scripts/check_gpu.py
+```
+
+This checks your PyTorch installation, GPU availability, and environment configuration.
+
+### AMD GPU Not Detected (ROCm)
+
+**Symptoms:**
+- You have an AMD GPU (RX 6000/7000/9000 series)
+- ROCm is installed
+- Still getting "No GPU detected"
+
+**Solution for RDNA3 GPUs (RX 7000/9000 series):**
+
+The `HSA_OVERRIDE_GFX_VERSION` environment variable is required:
+
+**Linux/macOS:**
+```bash
+export HSA_OVERRIDE_GFX_VERSION=11.0.0  # RX 7900 XT/XTX, RX 9070 XT
+export HSA_OVERRIDE_GFX_VERSION=11.0.1  # RX 7800 XT, RX 7700 XT
+export HSA_OVERRIDE_GFX_VERSION=11.0.2  # RX 7600
+```
+
+**Windows:**
+```cmd
+set HSA_OVERRIDE_GFX_VERSION=11.0.0
+```
+
+Or use the provided launcher scripts which set this automatically:
+```cmd
+start_gradio_ui_rocm.bat
+start_api_server_rocm.bat
+```
+
+**For RDNA2 GPUs (RX 6000 series):**
+
+```bash
+export HSA_OVERRIDE_GFX_VERSION=10.3.0  # Linux/macOS
+set HSA_OVERRIDE_GFX_VERSION=10.3.0     # Windows
+```
+
+**Verify ROCm installation:**
+
+```bash
+# Check if ROCm can see your GPU
+rocm-smi
+
+# Check PyTorch ROCm build
+python -c "import torch; print(f'ROCm: {torch.version.hip}')"
+```
+
+### NVIDIA GPU Not Detected (CUDA)
+
+**Symptoms:**
+- You have an NVIDIA GPU
+- CUDA is installed
+- Still getting "No GPU detected"
+
+**Solution:**
+
+1. **Check NVIDIA drivers:**
+   ```bash
+   nvidia-smi
+   ```
+   
+   If this fails, install/update NVIDIA drivers from https://www.nvidia.com/download/index.aspx
+
+2. **Check CUDA version compatibility:**
+   
+   ```bash
+   # Check PyTorch CUDA version
+   python -c "import torch; print(f'CUDA: {torch.version.cuda}')"
+   
+   # Check driver CUDA version
+   nvidia-smi  # Look for "CUDA Version: X.X"
+   ```
+
+3. **Reinstall PyTorch if needed:**
+   ```bash
+   pip uninstall torch torchvision torchaudio
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+   ```
+
+### CPU-Only PyTorch Installed
+
+**Symptoms:**
+- Diagnostic shows "Build type: CPU-only"
+
+**Solution:**
+
+Reinstall PyTorch with GPU support.
+
+**For AMD GPUs (Windows):**
+```cmd
+# See requirements-rocm.txt for full installation instructions
+pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
+```
+
+**For NVIDIA GPUs:**
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+Check https://pytorch.org/get-started/locally/ for latest versions.
+
+</Accordion>
+
+## Memory Issues
+
+<Accordion title="CUDA out of memory (OOM) errors" icon="memory">
+
+### Solutions by VRAM Tier
+
+**4-6GB VRAM:**
+```bash
+# Use smallest LM model + offload + quantization
+export ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B
+export MAX_CUDA_VRAM=6  # Force tier detection
+```
+
+**8-12GB VRAM:**
+```bash
+# Use medium LM model + selective offload
+export ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-1.7B
+```
+
+**16GB+ VRAM:**
+```bash
+# Use large LM model, no offload needed
+export ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-4B
+```
+
+### Reduce Memory Usage
+
+1. **Lower batch size:**
+   ```python
+   config = GenerationConfig(batch_size=1)  # Instead of 2 or 4
+   ```
+
+2. **Reduce duration:**
+   ```python
+   params = GenerationParams(duration=30)  # Instead of 60 or 120
+   ```
+
+3. **Disable thinking mode:**
+   ```python
+   params = GenerationParams(thinking=False)  # Saves ~2-4GB
+   ```
+
+4. **Force VAE on CPU:**
+   ```bash
+   export ACESTEP_VAE_ON_CPU=1
+   ```
+
+5. **Enable offload:**
+   ```bash
+   export ACESTEP_OFFLOAD_TO_CPU=1
+   ```
+
+See [GPU Compatibility](/concepts/gpu-compatibility) for detailed tier information.
+
+</Accordion>
+
+<Accordion title="LoRA memory issues (fixed)" icon="check-circle">
+
+### Status: FIXED (commit 731fabd)
+
+**Previous issue:**
+- High VRAM usage with LoRA (25-30GB)
+- Could not use LoRA on 24GB cards
+
+**Current behavior:**
+- LoRA now uses 14-18GB VRAM
+- Works on 24GB cards (RTX 4090, etc.)
+- Savings: ~10-15GB per LoRA operation
+
+**Verify the fix:**
+```bash
+python scripts/validate_lora_memory.py
+```
+
+Expected output:
+```
+✓ No deepcopy found in load_lora/unload_lora
+✓ Using state_dict backup (memory-efficient)
+✓ Backing up to CPU (saves VRAM)
+✓ Memory diagnostics enabled
+```
+
+</Accordion>
+
+## Generation Quality Issues
+
+<Accordion title="Generated audio is silent or very quiet" icon="volume-xmark">
+
+### Causes
+
+1. **Normalization disabled:**
+   ```python
+   params = GenerationParams(enable_normalization=True)  # Ensure enabled
+   ```
+
+2. **Extreme latent manipulation:**
+   ```python
+   # Reset to defaults
+   params = GenerationParams(
+       latent_shift=0.0,      # Default
+       latent_rescale=1.0,    # Default
+   )
+   ```
+
+3. **VAE decode issues:**
+   Check logs for VAE fallback warnings. If VAE is falling back to CPU with tiny chunks, generation may be corrupted.
+
+</Accordion>
+
+<Accordion title="Audio quality is poor or distorted" icon="volume">
+
+### Solutions
+
+1. **Increase inference steps (for base model):**
+   ```python
+   params = GenerationParams(inference_steps=64)  # Instead of 8
+   ```
+   
+   **Note:** Turbo model is optimized for 4-8 steps. Base model needs 32-100.
+
+2. **Adjust guidance scale:**
+   ```python
+   params = GenerationParams(guidance_scale=7.0)  # Try 5.0-10.0
+   ```
+
+3. **Enable thinking mode:**
+   ```python
+   params = GenerationParams(
+       thinking=True,
+       use_cot_metas=True,
+       use_cot_caption=True,
+   )
+   ```
+
+4. **Check normalization settings:**
+   ```python
+   params = GenerationParams(
+       enable_normalization=True,
+       normalization_db=-1.0,  # -1 to -6 dBFS
+   )
+   ```
+
+</Accordion>
+
+<Accordion title="LLM generates invalid metadata" icon="brain">
+
+### Solutions
+
+1. **Enable constrained decoding:**
+   ```python
+   params = GenerationParams(use_constrained_decoding=True)
+   ```
+
+2. **Adjust LM temperature:**
+   ```python
+   params = GenerationParams(
+       lm_temperature=0.7,  # Lower = more deterministic
+   )
+   ```
+
+3. **Use larger LM model:**
+   ```bash
+   export ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-1.7B  # Or 4B
+   ```
+
+4. **Provide explicit metadata:**
+   ```python
+   params = GenerationParams(
+       bpm=120,
+       keyscale="C Major",
+       timesignature="4",
+       use_cot_metas=False,  # Disable LM metadata generation
+   )
+   ```
+
+</Accordion>
+
+## Installation Issues
+
+<Accordion title="Package dependency conflicts" icon="box">
+
+### Solution: Use clean virtual environment
+
+```bash
+# Remove old environment
+rm -rf .venv
+
+# Create fresh environment with uv
+uv venv
+source .venv/bin/activate  # Linux/macOS
+# OR
+.venv\Scripts\activate  # Windows
+
+# Install dependencies
+uv sync
+```
+
+### For ROCm (AMD GPUs):
+
+**Windows:**
+```bash
+uv pip install -r requirements-rocm.txt
+```
+
+**Linux:**
+```bash
+uv pip install -r requirements-rocm-linux.txt
+```
+
+</Accordion>
+
+<Accordion title="Flash Attention installation fails" icon="bolt">
+
+### Optional Dependency
+
+Flash Attention is optional. ACE-Step works without it (uses standard PyTorch attention).
+
+**To skip Flash Attention:**
+- Just proceed without it
+- Performance impact: ~10-20% slower diffusion
+
+**To install Flash Attention:**
+
+**NVIDIA GPU:**
+```bash
+pip install flash-attn --no-build-isolation
+```
+
+**Requires:**
+- CUDA 11.8+
+- NVIDIA GPU with compute capability 8.0+ (Ampere/Ada/Hopper)
+- PyTorch 2.0+
+
+**Not supported:**
+- AMD GPUs (ROCm)
+- Apple Silicon
+- CPU
+
+</Accordion>
+
+## Platform-Specific Issues
+
+<Accordion title="WSL2 GPU access issues" icon="windows">
+
+### For NVIDIA GPUs in WSL2
+
+You need CUDA on WSL2:
+
+1. Install NVIDIA drivers on Windows (not in WSL2)
+2. Install CUDA toolkit in WSL2
+3. Follow: https://docs.nvidia.com/cuda/wsl-user-guide/index.html
+
+### For AMD GPUs
+
+ROCm support in WSL2 is limited. Consider:
+- Running on native Linux
+- Using Windows with `start_gradio_ui_rocm.bat` / `start_api_server_rocm.bat`
+
+</Accordion>
+
+<Accordion title="macOS specific issues" icon="apple">
+
+### MPS (Metal Performance Shaders) backend
+
+**Requirements:**
+- macOS 13.5+
+- Apple Silicon (M1/M2/M3/M4)
+
+**Enable MPS:**
+```bash
+export ACESTEP_DEVICE=mps
+export ACESTEP_LM_BACKEND=mlx  # Recommended for Apple Silicon
+```
+
+**Known issues:**
+- Some PyTorch ops not supported on MPS → fallback to CPU
+- Flash Attention not available → uses standard attention
+
+</Accordion>
+
+## Performance Issues
+
+<Accordion title="Generation is very slow" icon="hourglass">
+
+### Diagnostic
+
+Run profiling to identify bottleneck:
+
+```bash
+python profile_inference.py --detailed --llm-debug
+```
+
+### If LLM is the bottleneck:
+
+1. **Use faster backend:**
+   ```bash
+   export ACESTEP_LM_BACKEND=vllm  # NVIDIA GPU
+   # OR
+   export ACESTEP_LM_BACKEND=mlx   # Apple Silicon
+   ```
+
+2. **Disable CFG:**
+   ```python
+   params = GenerationParams(lm_cfg_scale=1.0)  # Single pass
+   ```
+
+3. **Disable constrained decoding:**
+   ```python
+   params = GenerationParams(use_constrained_decoding=False)
+   ```
+
+4. **Use smaller LM model:**
+   ```bash
+   export ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B
+   ```
+
+### If DiT is the bottleneck:
+
+1. **Reduce inference steps:**
+   ```python
+   params = GenerationParams(inference_steps=4)  # Turbo model
+   ```
+
+2. **Enable quantization:**
+   ```bash
+   # In handler initialization
+   quantization="int8_weight_only"
+   ```
+
+3. **Reduce duration:**
+   ```python
+   params = GenerationParams(duration=30)  # Instead of 60+
+   ```
+
+See [Benchmarking](/advanced/benchmark) for detailed profiling.
+
+</Accordion>
+
+<Accordion title="First generation is slow (compilation overhead)" icon="clock">
+
+### Expected Behavior
+
+The first generation includes JIT compilation overhead:
+- PyTorch model compilation: 10-30s
+- vLLM warmup: 5-10s
+- Total first-run overhead: 15-40s
+
+**Subsequent generations are fast** (overhead paid once per session).
+
+### Solutions
+
+1. **Keep service running:**
+   - Use API server instead of CLI
+   - First request is slow, rest are fast
+
+2. **Skip compilation (not recommended):**
+   ```python
+   # In handler initialization
+   compile_model=False  # Slower inference, no warmup overhead
+   ```
+
+</Accordion>
+
+## Environment Variables Reference
+
+### ROCm (AMD GPUs)
+
+| Variable | Purpose | Example |
+|----------|---------|--------|
+| `HSA_OVERRIDE_GFX_VERSION` | Override GPU architecture | `11.0.0` (RDNA3), `10.3.0` (RDNA2) |
+| `MIOPEN_FIND_MODE` | MIOpen kernel selection | `FAST` |
+| `TORCH_COMPILE_BACKEND` | PyTorch compilation backend | `eager` (ROCm Windows) |
+| `ACESTEP_LM_BACKEND` | Language model backend | `pt` (recommended) |
+
+### CUDA (NVIDIA GPUs)
+
+| Variable | Purpose | Example |
+|----------|---------|--------|
+| `CUDA_VISIBLE_DEVICES` | Select which GPU to use | `0` (first GPU) |
+
+### ACE-Step Specific
+
+| Variable | Purpose | Example |
+|----------|---------|--------|
+| `MAX_CUDA_VRAM` | Override detected VRAM (enforces hard cap) | `8` (simulate 8GB GPU) |
+| `ACESTEP_VAE_ON_CPU` | Force VAE decode on CPU | `1` (enable) |
+| `ACESTEP_DEVICE` | Force device selection | `cuda`, `mps`, `cpu` |
+| `ACESTEP_LM_BACKEND` | Force LM backend | `vllm`, `mlx`, `pt` |
+| `ACESTEP_LM_MODEL_PATH` | Override LM model | `acestep-5Hz-lm-0.6B` |
+
+## Still Having Issues?
+
+If none of the above solutions work:
+
+1. **Run diagnostics:**
+   ```bash
+   python scripts/check_gpu.py > gpu_diagnostic.txt
+   ```
+
+2. **Enable debug logging:**
+   ```bash
+   export LOGURU_LEVEL=DEBUG
+   python profile_inference.py --detailed --llm-debug
+   ```
+
+3. **Open an issue on GitHub** with:
+   - Diagnostic output
+   - GPU model and VRAM
+   - OS (Windows/Linux/macOS)
+   - ROCm/CUDA version
+   - Full error traceback
+
+## Related Resources
+
+- [Generation Parameters](/advanced/generation-parameters) — Parameter reference
+- [LLM Configuration](/advanced/llm-configuration) — LM tuning
+- [Benchmarking](/advanced/benchmark) — Performance profiling
+- [GPU Compatibility](/concepts/gpu-compatibility) — VRAM requirements
+- [Installation Guide](/installation) — Setup instructions

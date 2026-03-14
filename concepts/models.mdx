@@ -1,0 +1,533 @@
+---
+title: Model Zoo
+description: Complete guide to ACE-Step 1.5's DiT and LM models with selection guidance
+---
+
+## Overview
+
+ACE-Step 1.5 provides a comprehensive model zoo with multiple variants optimized for different use cases. The system uses two types of models working together:
+
+- **DiT Models** (Diffusion Transformers): Generate audio waveforms
+- **LM Models** (Language Models): Plan and structure generation (optional)
+
+## DiT Models
+
+Diffusion Transformer models are the core audio generators. All DiT models share the same architecture but differ in training methodology and capabilities.
+
+### Model Comparison Table
+
+| Model | Training | Steps | CFG | Quality | Speed | Fine-Tunability | HuggingFace |
+|-------|----------|-------|-----|---------|-------|-----------------|-------------|
+| `acestep-v15-turbo` | Pre+SFT+Distill | 8 | ❌ | Very High | ⚡⚡⚡ | Medium | [Link](https://huggingface.co/ACE-Step/Ace-Step1.5) |
+| `acestep-v15-turbo-rl` | Pre+SFT+RL+Distill | 8 | ❌ | Very High | ⚡⚡⚡ | Medium | To be released |
+| `acestep-v15-sft` | Pre+SFT | 50 | ✅ | High | ⚡ | Easy | [Link](https://huggingface.co/ACE-Step/acestep-v15-sft) |
+| `acestep-v15-base` | Pre-training only | 50 | ✅ | Medium | ⚡ | Easy | [Link](https://huggingface.co/ACE-Step/acestep-v15-base) |
+
+**Legend:**
+- **Pre**: Pretrained on large-scale music data
+- **SFT**: Supervised fine-tuning for prompt adherence
+- **RL**: Reinforcement learning (intrinsic rewards)
+- **Distill**: Distilled for fast inference
+- **CFG**: Classifier-Free Guidance support
+
+### Turbo Series (Recommended)
+
+The Turbo models use consistency distillation to achieve high quality in just 8 diffusion steps, making them 6x faster than base models.
+
+#### acestep-v15-turbo (Default)
+
+**Best for:** Daily use, rapid iteration, production workflows
+
+**Characteristics:**
+- Joint distillation on shift parameters 1, 2, 3
+- Best balance of creativity, semantic adherence, and audio quality
+- Thoroughly tested and most stable
+- Generates 30s audio in &lt;2s on A100, &lt;10s on RTX 3090
+
+**Supported Tasks:**
+- ✅ Text2Music
+- ✅ Cover (style transfer)
+- ✅ Repaint (local editing)
+- ✅ Reference audio guidance
+
+**Training Details:**
+```
+Base → SFT (50 steps, CFG=7.0) → Distillation (8 steps, joint shift 1-3)
+```
+
+#### Turbo Shift Variants
+
+ACE-Step provides specialized Turbo variants distilled at different shift values:
+
+**acestep-v15-turbo-shift1**
+- Distilled only on shift=1
+- **More details**: Richer texture and timbre variations
+- **Weaker semantics**: May deviate from prompt
+- Best for: Experimental sounds, when prompt adherence is less critical
+
+**acestep-v15-turbo-shift3**
+- Distilled only on shift=3
+- **Clearer structure**: Better semantic alignment
+- **Richer timbre**: More pronounced instrumental characteristics
+- **May sound "dry"**: Reduced atmospheric elements
+- Best for: Clear, direct sound; minimal orchestration
+
+**acestep-v15-turbo-continuous**
+- Experimental model supporting continuous shift 1-5
+- Most flexible tuning via `shift` parameter
+- Less thoroughly tested
+- Best for: Advanced users wanting maximum control
+
+<Info>
+  **What is shift?** The shift parameter controls how diffusion steps are distributed. Higher shift = more effort on early structure, lower shift = more even refinement. Think of it as "sketch first vs. paint-as-you-go."
+</Info>
+
+#### acestep-v15-turbo-rl
+
+**Status:** To be released
+
+**Characteristics:**
+- Trained with intrinsic reinforcement learning
+- Highest quality among Turbo models
+- Better adherence to complex prompts
+- Improved coherence in long-form generation
+
+**RL Training Approach:**
+- Uses internal model signals (no external reward model)
+- Avoids biases from human preference data
+- Learns optimal alignment between LM codes and audio output
+
+### SFT Model
+
+**Best for:** Detail-oriented work, CFG tuning, when quality matters more than speed
+
+**acestep-v15-sft**
+
+**Characteristics:**
+- 50 diffusion steps for gradual refinement
+- Supports Classifier-Free Guidance (CFG scale 1.0-15.0)
+- Better semantic parsing than base model
+- Richer detail expression
+
+**Trade-offs:**
+- Slower inference (~6x vs. Turbo)
+- More error accumulation over 50 steps
+- Slightly reduced audio clarity vs. Turbo
+
+**When to use:**
+- You need CFG for precise prompt control
+- Quality is paramount, time is not critical
+- Working with complex, detailed prompts
+- Prefer incremental refinement aesthetic
+
+**CFG Guidance:**
+```python
+# Lower CFG = more creative, higher CFG = stricter adherence
+guidence_scale = 7.0  # Default, balanced
+guidence_scale = 3.0  # More freedom, creative
+guidence_scale = 12.0 # Strict prompt following
+```
+
+### Base Model
+
+**Best for:** Fine-tuning, advanced tasks, research
+
+**acestep-v15-base**
+
+**Characteristics:**
+- Pretrained foundation without SFT
+- Master of all tasks including exclusive ones
+- Highest plasticity for customization
+- Medium quality out-of-box, excellent after fine-tuning
+
+**Exclusive Tasks:**
+
+| Task | Description | Use Case |
+|------|-------------|----------|
+| **Extract** | Separate individual stems from mixed audio | Isolate vocals, drums, bass from full mix |
+| **Lego** | Add new instrumental layers to existing tracks | Add drums to guitar-only recording |
+| **Complete** | Generate full accompaniment for single track | Create backing track for a cappella vocals |
+
+**Fine-tuning Capabilities:**
+- Best starting point for LoRA training
+- Most responsive to style-specific data
+- Can be shaped into custom SFT models
+- Ideal for research and experimentation
+
+<Check>
+  If you're building a custom model for a specific genre or aesthetic, start with `acestep-v15-base`.
+</Check>
+
+### Model Selection Guide
+
+<AccordionGroup>
+  <Accordion title="I want the fastest generation" icon="bolt">
+    Use **acestep-v15-turbo** (default) with no LM or 0.6B LM.
+    
+    This gives you &lt;1s generation on high-end GPUs, &lt;10s on consumer hardware.
+  </Accordion>
+  
+  <Accordion title="I need the highest quality" icon="star">
+    Use **acestep-v15-turbo-rl** (when released) or **acestep-v15-sft** with 4B LM.
+    
+    SFT provides detailed refinement with CFG control. Turbo-RL will offer best quality at Turbo speed.
+  </Accordion>
+  
+  <Accordion title="I want to fine-tune for my style" icon="paintbrush">
+    Use **acestep-v15-base** as the foundation.
+    
+    Base model has the highest plasticity and responds best to LoRA training.
+  </Accordion>
+  
+  <Accordion title="I need to separate audio stems" icon="layer-group">
+    Use **acestep-v15-base** exclusively.
+    
+    Only the base model supports extract, lego, and complete tasks.
+  </Accordion>
+  
+  <Accordion title="I want to experiment with shift parameters" icon="sliders">
+    Try **acestep-v15-turbo-shift1**, **turbo-shift3**, or **turbo-continuous**.
+    
+    Each provides different characteristics. Shift1 = more detail, shift3 = clearer structure.
+  </Accordion>
+</AccordionGroup>
+
+## LM Models
+
+Language Models serve as optional planners that transform user prompts into structured generation plans.
+
+### Model Comparison Table
+
+| Model | Parameters | Base Model | CoT | Query Rewrite | Audio Understanding | Memory | World Knowledge | HuggingFace |
+|-------|------------|------------|-----|---------------|---------------------|--------|-----------------|-------------|
+| `acestep-5Hz-lm-0.6B` | 0.6B | Qwen3-0.6B | ✅ | ✅ | Medium | Weak | Basic | [Link](https://huggingface.co/ACE-Step/acestep-5Hz-lm-0.6B) |
+| `acestep-5Hz-lm-1.7B` | 1.7B | Qwen3-1.7B | ✅ | ✅ | Medium | Medium | Medium | [Link](https://huggingface.co/ACE-Step/acestep-5Hz-lm-1.7B) |
+| `acestep-5Hz-lm-4B` | 4B | Qwen3-4B | ✅ | ✅ | Strong | Strong | Rich | [Link](https://huggingface.co/ACE-Step/acestep-5Hz-lm-4B) |
+
+**All LM models have identical training data** - differences are purely in capacity and knowledge retention.
+
+### LM Capabilities
+
+#### Chain-of-Thought (CoT) Reasoning
+
+All LM models perform multi-step reasoning to:
+- Infer music metadata (BPM, key, time signature, duration)
+- Analyze style and genre implications
+- Generate appropriate semantic codes for DiT
+- Expand simple prompts into detailed plans
+
+**Example:**
+```
+Input: "energetic rock anthem"
+
+CoT Process:
+1. Genre: rock → electric guitars, drums, bass
+2. Energy: high → faster BPM (130-140), driving rhythm
+3. Anthem: chorus-focused, powerful vocals
+4. Metadata inference: BPM=135, key=E Major, time=4/4
+5. Code generation: [semantic codes with melody structure]
+```
+
+#### Query Rewriting
+
+LM models automatically expand and clarify user inputs:
+
+```
+User input: "sad song"
+
+LM rewrite: "melancholic piano ballad with female breathy vocal, 
+intimate atmosphere, gentle strings, slow tempo, emotional delivery"
+```
+
+#### Audio Understanding
+
+LM models can analyze reference audio and extract:
+- Style and genre
+- Instrumentation
+- Approximate BPM and key
+- Vocal characteristics
+- Overall mood and atmosphere
+
+<Warning>
+  Audio understanding provides directional guidance, not precise analysis. Use it as a starting point for iteration.
+</Warning>
+
+### Model Specifications
+
+#### acestep-5Hz-lm-0.6B
+
+**Best for:** Low VRAM (6-8GB), rapid prototyping, simple prompts
+
+**Specifications:**
+- Parameters: 614M
+- Layers: 28
+- Attention heads: 14
+- Hidden size: 896
+- Intermediate size: 4864
+- Context length: 32K tokens
+- VRAM: ~1.2GB (FP16), ~0.7GB (INT8)
+
+**Characteristics:**
+- Basic world knowledge of common genres and instruments
+- Weak melody memory from reference audio
+- Adequate for standard music generation
+- May struggle with obscure styles or complex compositions
+
+**Inference Speed:**
+- PyTorch backend: ~0.5-1s
+- vLLM backend: ~0.3-0.7s
+
+#### acestep-5Hz-lm-1.7B (Recommended)
+
+**Best for:** Most users, balanced performance, 8-16GB VRAM
+
+**Specifications:**
+- Parameters: 1.77B
+- Layers: 28
+- Attention heads: 14 (KV heads: 2)
+- Hidden size: 1536
+- Intermediate size: 8960
+- Context length: 32K tokens
+- VRAM: ~3.5GB (FP16), ~2.0GB (INT8)
+
+**Characteristics:**
+- Medium world knowledge covering most genres and styles
+- Medium melody memory, can recall reference audio patterns
+- Good balance of capability and resource usage
+- Handles complex prompts and multi-lingual lyrics well
+
+**Inference Speed:**
+- PyTorch backend: ~1-2s
+- vLLM backend: ~0.5-1s
+
+#### acestep-5Hz-lm-4B
+
+**Best for:** High-end GPUs (≥24GB), complex tasks, best quality
+
+**Specifications:**
+- Parameters: 4.23B
+- Layers: 40
+- Attention heads: 20 (KV heads: 4)
+- Hidden size: 2048
+- Intermediate size: 11008
+- Context length: 32K tokens
+- VRAM: ~8.5GB (FP16), ~4.5GB (INT8)
+
+**Characteristics:**
+- Rich world knowledge including niche genres and long-tail instruments
+- Strong melody memory, accurate reference audio recall
+- Excellent compositional capability
+- Best at complex, multi-layered prompts
+- Superior audio understanding
+
+**Inference Speed:**
+- PyTorch backend: ~2-4s
+- vLLM backend: ~1-2s
+
+### LM vs. No LM
+
+**When to use LM:**
+- ✅ Text-to-music generation from simple prompts
+- ✅ You want automatic metadata inference
+- ✅ Need query expansion and caption rewriting
+- ✅ Working with lyrics and structure tags
+- ✅ Audio understanding from reference audio
+
+**When to skip LM:**
+- ✅ Cover mode (reference audio provides structure)
+- ✅ Repaint mode (context-based editing)
+- ✅ You provide explicit metadata and semantic codes
+- ✅ Maximum speed is critical
+- ✅ Very low VRAM (≤6GB)
+- ✅ You want direct DiT control
+
+<Info>
+  Disabling LM doesn't disable text input - DiT still uses caption and lyrics directly. You lose CoT reasoning and automatic metadata inference.
+</Info>
+
+### LM Backend Selection
+
+ACE-Step supports three LM backends:
+
+| Backend | Platform | Speed | VRAM | Notes |
+|---------|----------|-------|------|-------|
+| **vLLM** | CUDA, ROCm | ⚡⚡⚡ | Higher | Best for ≥8GB VRAM, PagedAttention KV cache |
+| **PyTorch** | CUDA, ROCm, XPU, MPS, CPU | ⚡⚡ | Lower | Fallback for &lt;8GB, universal compatibility |
+| **MLX** | Apple Silicon | ⚡⚡⚡ | Unified | Native M-series acceleration, recommended for Mac |
+
+**Auto-selection logic:**
+- Mac (Apple Silicon) → MLX
+- NVIDIA/AMD GPU ≥8GB → vLLM
+- GPU &lt;8GB → PyTorch
+- CPU → PyTorch
+
+## Combination Strategies
+
+### Recommended Configurations
+
+<CardGroup cols={2}>
+  <Card title="Daily Production" icon="rocket">
+    **Turbo + 1.7B LM**
+    
+    Best balance of speed, quality, and capability. Suitable for 90% of use cases.
+    
+    VRAM: ~8-12GB
+  </Card>
+  
+  <Card title="Maximum Speed" icon="bolt">
+    **Turbo + No LM** or **Turbo + 0.6B LM**
+    
+    Fastest generation for rapid iteration or low VRAM systems.
+    
+    VRAM: ~4-6GB
+  </Card>
+  
+  <Card title="Highest Quality" icon="star">
+    **SFT + 4B LM** or **Turbo-RL + 4B LM** (when released)
+    
+    Best output quality for production work where time is not critical.
+    
+    VRAM: ~16-24GB
+  </Card>
+  
+  <Card title="Low VRAM" icon="microchip">
+    **Turbo + No LM**
+    
+    INT8 quantization + CPU offload enables generation on ≤4GB VRAM.
+    
+    VRAM: ~3-4GB
+  </Card>
+</CardGroup>
+
+### VRAM Requirements by Configuration
+
+| Configuration | FP16 | INT8 + Offload | Notes |
+|---------------|------|----------------|-------|
+| Turbo + No LM | ~6GB | ~3GB | Fastest, minimal VRAM |
+| Turbo + 0.6B (PT) | ~8GB | ~4GB | Good for 6-8GB GPUs |
+| Turbo + 1.7B (vLLM) | ~12GB | ~6GB | Recommended default |
+| Turbo + 4B (vLLM) | ~20GB | ~10GB | Best quality |
+| SFT + 1.7B | ~12GB | ~6GB | Detailed refinement |
+| Base + 1.7B | ~12GB | ~6GB | For fine-tuning |
+
+<Check>
+  See [GPU Compatibility](/concepts/gpu-compatibility) for detailed tier-based configurations and automatic optimization.
+</Check>
+
+## Performance Benchmarks
+
+### Generation Speed (30s audio)
+
+**RTX 4090 (24GB):**
+- Turbo + 4B LM: 1.5-3s
+- Turbo + 1.7B LM: 1.0-2s
+- Turbo + No LM: 0.5-1s
+- SFT + 1.7B LM: 6-12s
+
+**RTX 3090 (24GB):**
+- Turbo + 4B LM: 3-6s
+- Turbo + 1.7B LM: 2-4s
+- Turbo + No LM: 1-3s
+- SFT + 1.7B LM: 12-24s
+
+**RTX 3060 (12GB):**
+- Turbo + 1.7B LM: 6-12s (INT8)
+- Turbo + 0.6B LM: 4-8s (INT8)
+- Turbo + No LM: 3-6s (INT8)
+
+**Apple M2 Max (32GB unified):**
+- Turbo + 1.7B LM (MLX): 8-15s
+- Turbo + No LM (MLX): 5-10s
+
+<Info>
+  Actual performance varies with prompt complexity, audio duration, batch size, and system configuration. Enable `torch.compile` for 20-30% speedup after warmup.
+</Info>
+
+## Downloading Models
+
+### Using CLI Downloader
+
+```bash
+# Download default models (Turbo + 1.7B LM + VAE)
+uv run acestep-download
+
+# Download all models
+uv run acestep-download --all
+
+# Download specific DiT model
+uv run acestep-download --model acestep-v15-turbo
+uv run acestep-download --model acestep-v15-sft
+uv run acestep-download --model acestep-v15-base
+
+# Download specific LM model
+uv run acestep-download --model acestep-5Hz-lm-0.6B
+uv run acestep-download --model acestep-5Hz-lm-4B
+
+# List available models
+uv run acestep-download --list
+```
+
+### Manual Download
+
+Models are hosted on HuggingFace and can be downloaded manually:
+
+```bash
+# Using huggingface-cli
+huggingface-cli download ACE-Step/Ace-Step1.5 --local-dir checkpoints/acestep-v15-turbo
+huggingface-cli download ACE-Step/acestep-5Hz-lm-1.7B --local-dir checkpoints/acestep-5Hz-lm-1.7B
+
+# Using git-lfs
+git lfs install
+git clone https://huggingface.co/ACE-Step/Ace-Step1.5 checkpoints/acestep-v15-turbo
+```
+
+### Model Sizes
+
+| Model | Size | Download Time (100Mbps) |
+|-------|------|------------------------|
+| acestep-v15-turbo | ~9.5GB | ~13 min |
+| acestep-v15-sft | ~9.5GB | ~13 min |
+| acestep-v15-base | ~9.5GB | ~13 min |
+| acestep-5Hz-lm-0.6B | ~1.2GB | ~2 min |
+| acestep-5Hz-lm-1.7B | ~3.5GB | ~5 min |
+| acestep-5Hz-lm-4B | ~8.5GB | ~11 min |
+| VAE | ~0.5GB | ~1 min |
+
+First launch auto-downloads default models if not present.
+
+## Custom Models (LoRA)
+
+Beyond official models, you can create custom variants using LoRA fine-tuning:
+
+**Use Cases:**
+- Train on specific genre or artist style
+- Capture unique timbre or mixing aesthetic
+- Fine-tune for specific use case (game music, podcast intros, etc.)
+- Experiment with niche musical styles
+
+**Training Requirements:**
+- 8-20 songs for style capture
+- 12GB VRAM minimum (RTX 3060 or better)
+- ~1 hour training time on RTX 3090
+- Base or SFT model as foundation
+
+<Check>
+  See the [LoRA Training Tutorial](/features/lora-training) for step-by-step instructions on creating custom models.
+</Check>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand how LM and DiT work together
+  </Card>
+  <Card title="Generation Process" icon="wand-magic-sparkles" href="/concepts/generation-process">
+    Learn the complete generation pipeline
+  </Card>
+  <Card title="GPU Compatibility" icon="microchip" href="/concepts/gpu-compatibility">
+    Check your hardware compatibility
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install and set up ACE-Step 1.5
+  </Card>
+</CardGroup>

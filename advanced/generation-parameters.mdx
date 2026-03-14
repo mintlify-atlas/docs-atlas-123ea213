@@ -1,0 +1,253 @@
+---
+title: 'Generation Parameters'
+description: 'Complete reference for all GenerationParams configuration options'
+icon: 'sliders'
+---
+
+## Overview
+
+The `GenerationParams` dataclass controls all aspects of music generation in ACE-Step 1.5. This reference documents every parameter with valid ranges, defaults, and use cases.
+
+## Text Inputs
+
+<ParamField path="caption" type="string" default="">
+  Main text prompt describing the desired music. Maximum 512 characters.
+  
+  **Examples:**
+  - `"A soft, melancholic piano ballad in C minor"`
+  - `"Upbeat electronic dance music with heavy bass"`
+</ParamField>
+
+<ParamField path="lyrics" type="string" default="">
+  Lyrics for the music. Use `"[Instrumental]"` for instrumental songs. Maximum 4096 characters.
+  
+  **Note:** If you want instrumental music regardless of lyrics, set `instrumental=True`.
+</ParamField>
+
+<ParamField path="instrumental" type="boolean" default="false">
+  If `true`, generate instrumental music regardless of lyrics field content.
+</ParamField>
+
+## Music Metadata
+
+<ParamField path="bpm" type="integer" default="null">
+  Beats per minute (tempo). Range: **30-300**. Set to `null` for automatic estimation.
+  
+  **Common tempos:**
+  - 60-80: Slow ballad
+  - 90-110: Pop/rock
+  - 120-140: Dance/EDM
+  - 140+: Fast electronic, drum & bass
+</ParamField>
+
+<ParamField path="keyscale" type="string" default="">
+  Musical key (e.g., `"C Major"`, `"Am"`, `"F# minor"`). Leave empty for auto-detection.
+  
+  **Format:** `[A-G][#/♭]? [major/minor]`
+  
+  **Examples:**
+  - `"C Major"`
+  - `"Am"` (A minor)
+  - `"F# minor"`
+  - `"Bb Major"`
+</ParamField>
+
+<ParamField path="timesignature" type="string" default="">
+  Time signature. Valid values: `"2"` (2/4), `"3"` (3/4), `"4"` (4/4), `"6"` (6/8). Leave empty for auto-detection.
+  
+  **Note:** Use the numeric portion only (e.g., `"4"` for 4/4 time).
+</ParamField>
+
+<ParamField path="vocal_language" type="string" default="unknown">
+  Language code for vocals. See `acestep/constants.py:VALID_LANGUAGES` for supported codes.
+  
+  **Common codes:**
+  - `"en"`: English
+  - `"zh"`: Chinese
+  - `"ja"`: Japanese
+  - `"es"`: Spanish
+  - `"unknown"`: Auto-detect
+</ParamField>
+
+<ParamField path="duration" type="float" default="-1.0">
+  Target audio length in seconds. Range: **10-600**. If `< 0` or `null`, model chooses automatically.
+  
+  **GPU memory limits:**
+  - 4GB VRAM: max 30s
+  - 8GB VRAM: max 60s
+  - 16GB+ VRAM: max 240s+
+  
+  See [GPU Compatibility](/concepts/gpu-compatibility) for tier-specific limits.
+</ParamField>
+
+## Diffusion Parameters
+
+<ParamField path="inference_steps" type="integer" default="8">
+  Number of diffusion steps. Range: **4-100**.
+  
+  **Recommended values:**
+  - Turbo model: 4-8 steps
+  - Base model: 32-100 steps
+  
+  **Trade-offs:**
+  - Lower = faster generation, less detail
+  - Higher = slower generation, more detail
+</ParamField>
+
+<ParamField path="guidance_scale" type="float" default="7.0">
+  CFG (classifier-free guidance) strength. Range: **1.0-20.0**. Higher values follow the prompt more strictly.
+  
+  **Only supported for non-turbo models.**
+  
+  **Recommended values:**
+  - 3.0-5.0: More creative/varied
+  - 7.0: Balanced (default)
+  - 10.0+: Very strict adherence to prompt
+</ParamField>
+
+<ParamField path="seed" type="integer" default="-1">
+  Integer seed for reproducibility. Use `-1` for random seed each time.
+  
+  **Usage:**
+  - Same seed + same params = same output
+  - Useful for A/B testing parameter changes
+</ParamField>
+
+## Advanced DiT Parameters
+
+<ParamField path="use_adg" type="boolean" default="false">
+  Whether to use Adaptive Dual Guidance. **Only works for base model (not turbo).**
+  
+  Provides more control over guidance during generation.
+</ParamField>
+
+<ParamField path="cfg_interval_start" type="float" default="0.0">
+  Start ratio (0.0-1.0) to apply CFG. Allows skipping CFG during early diffusion steps.
+  
+  **Example:** `0.2` = start CFG at 20% through the diffusion process.
+</ParamField>
+
+<ParamField path="cfg_interval_end" type="float" default="1.0">
+  End ratio (0.0-1.0) to apply CFG. Allows disabling CFG during late diffusion steps.
+  
+  **Example:** `0.8` = stop CFG at 80% through the diffusion process.
+</ParamField>
+
+<ParamField path="shift" type="float" default="1.0">
+  Timestep shift factor. When `!= 1.0`, applies transformation: `t = shift * t / (1 + (shift - 1) * t)`
+  
+  **Advanced parameter** — affects diffusion schedule. Use default unless experimenting.
+</ParamField>
+
+<ParamField path="infer_method" type="string" default="ode">
+  Diffusion inference method. Valid values: `"ode"` or `"sde"`.
+  
+  - `"ode"`: Ordinary Differential Equation solver (default, deterministic)
+  - `"sde"`: Stochastic Differential Equation solver (adds noise)
+</ParamField>
+
+<ParamField path="timesteps" type="array" default="null">
+  Custom timesteps as a list of floats (e.g., `[0.97, 0.76, 0.615, 0.5, 0.395, 0.28, 0.18, 0.085, 0]`).
+  
+  **If provided, overrides `inference_steps` and `shift`.**
+  
+  Advanced parameter for manual control over diffusion schedule.
+</ParamField>
+
+## Latent Manipulation
+
+<ParamField path="latent_shift" type="float" default="0.0">
+  Additive shift applied to DiT latents before VAE decode. Default `0.0` = no shift.
+  
+  **Experimental parameter.** Affects brightness/loudness of output.
+</ParamField>
+
+<ParamField path="latent_rescale" type="float" default="1.0">
+  Multiplicative rescale applied to DiT latents before VAE decode. Default `1.0` = no rescale.
+  
+  **Experimental parameter.** Affects dynamic range of output.
+</ParamField>
+
+## Audio Post-Processing
+
+<ParamField path="enable_normalization" type="boolean" default="true">
+  Whether to apply loudness normalization to the output audio.
+</ParamField>
+
+<ParamField path="normalization_db" type="float" default="-1.0">
+  Target loudness in dB for normalization (e.g., `-1.0` for -1 dBFS peak).
+  
+  **Common values:**
+  - `-1.0`: Near-max loudness (default)
+  - `-3.0`: Conservative headroom
+  - `-6.0`: More headroom for mastering
+</ParamField>
+
+<ParamField path="fade_in_duration" type="float" default="0.0">
+  Fade-in duration in seconds. `0` = no fade-in.
+</ParamField>
+
+<ParamField path="fade_out_duration" type="float" default="0.0">
+  Fade-out duration in seconds. `0` = no fade-out.
+</ParamField>
+
+## Task-Specific Parameters
+
+<ParamField path="task_type" type="string" default="text2music">
+  Type of generation task.
+  
+  **Valid values:**
+  - `"text2music"`: Text-to-music generation (default)
+  - `"cover"`: Style transfer from reference audio
+  - `"repaint"`: Replace a segment of existing audio
+  - `"lego"`: Multi-track composition
+  - `"extract"`: Extract/isolate elements
+  - `"complete"`: Audio inpainting/completion
+</ParamField>
+
+<ParamField path="reference_audio" type="string" default="null">
+  Path to reference audio file for style transfer or cover tasks.
+  
+  **Used by:** `cover`, `repaint` tasks
+</ParamField>
+
+<ParamField path="src_audio" type="string" default="null">
+  Path to source audio file for audio-to-audio tasks.
+  
+  **Used by:** `repaint`, `complete`, `extract` tasks
+</ParamField>
+
+<ParamField path="audio_codes" type="string" default="">
+  Audio semantic codes as a string (e.g., `"<|audio_code_123|><|audio_code_456|>..."`)
+  
+  **Advanced use** — for code-control generation. Usually generated by LM.
+</ParamField>
+
+<ParamField path="repainting_start" type="float" default="0.0">
+  For `repaint`/`lego` tasks: start time in seconds for region to repaint.
+</ParamField>
+
+<ParamField path="repainting_end" type="float" default="-1">
+  For `repaint`/`lego` tasks: end time in seconds for region to repaint. `-1` = until end.
+</ParamField>
+
+<ParamField path="audio_cover_strength" type="float" default="1.0">
+  Strength of reference audio/codes influence. Range: **0.0-1.0**.
+  
+  **Recommended values:**
+  - `0.2`: Light style transfer
+  - `0.5`: Moderate style transfer
+  - `1.0`: Strong adherence to reference (default)
+</ParamField>
+
+<ParamField path="instruction" type="string" default="">
+  Optional task instruction prompt. If empty, auto-generated by system.
+  
+  **Advanced parameter** — used internally for task conditioning.
+</ParamField>
+
+## Related Resources
+
+- [LLM Configuration](/advanced/llm-configuration) — Chain-of-Thought settings
+- [Benchmarking](/advanced/benchmark) — Performance profiling
+- [Troubleshooting](/advanced/troubleshooting) — Common issues

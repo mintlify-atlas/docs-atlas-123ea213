@@ -1,0 +1,375 @@
+---
+title: Cover Generation
+description: Create covers and remixes using reference audio with ACE-Step 1.5
+---
+
+# Cover Generation
+
+Cover generation uses reference audio to guide the structure and style of your generated music, enabling style transfer, remixes, and variations while maintaining the original composition.
+
+## Overview
+
+The cover task uses **source audio** to control:
+
+- **Melody**: Note direction and pitch
+- **Rhythm**: Beat, accent, groove
+- **Chords**: Harmonic progression and changes
+- **Orchestration**: Instrument arrangement and layers
+- **Partial Timbre**: Some timbre characteristics
+
+<Note>
+Cover mode **skips the LM** and uses the source audio directly. The DiT model extracts semantic structure from your reference and generates new audio based on your text conditions.
+</Note>
+
+## How Cover Works
+
+### Audio Processing Pipeline
+
+1. **Source Audio** → Converted to semantic codes (quantized structural information)
+2. **Semantic Codes** + **Text Conditions** → DiT generation
+3. **DiT Output** → High-fidelity audio with new style/details
+
+**What Gets Preserved:**
+- Song structure (verse, chorus, bridge positions)
+- Melodic contour and harmony
+- Rhythmic patterns
+
+**What Changes:**
+- Timbre and production style (based on caption)
+- Vocal characteristics (based on caption/lyrics)
+- Arrangement details and instrumentation
+
+## Basic Cover Workflow
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+params = GenerationParams(
+    task_type="cover",
+    src_audio="path/to/source.wav",  # Original song
+    caption="Rock version with electric guitars, powerful drums, raspy male vocals",
+    lyrics="[Verse 1]\nNew lyrics here\nOr keep original structure",
+    audio_cover_strength=1.0,  # 0.0-1.0, higher = closer to source
+    thinking=False,  # Cover skips LM
+)
+
+config = GenerationConfig(
+    batch_size=4,  # Generate multiple variations
+    audio_format="flac"
+)
+
+result = generate_music(dit_handler, llm_handler, params, config)
+```
+
+## Cover Strength Parameter
+
+The `audio_cover_strength` parameter controls how closely the generation follows the source audio:
+
+| Strength | Behavior | Use Case |
+|----------|----------|----------|
+| **0.0 - 0.2** | Style transfer, loose structure | Radical style changes, use source as inspiration |
+| **0.3 - 0.5** | Moderate adherence | Creative remix with significant changes |
+| **0.6 - 0.8** | Strong structure preservation | Traditional cover with new style |
+| **0.9 - 1.0** | Very close to original | Minor variations, timbre adjustments |
+
+<Tip>
+**Default: 1.0** for close covers. Use **0.2-0.3** for style transfer tasks.
+</Tip>
+
+## Style Transfer
+
+Style transfer uses a low cover strength to reinterpret music in a completely different style:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="classical_piece.wav",
+    caption="Lo-fi hip-hop with jazzy piano, vinyl crackle, mellow beats, relaxed atmosphere",
+    lyrics="[Instrumental]",
+    audio_cover_strength=0.2,  # Low strength for style transfer
+    instrumental=True,
+)
+```
+
+### Style Transfer Examples
+
+- **Classical → Lo-fi**: Maintain melodic structure, add beats and vinyl texture
+- **Pop → Jazz**: Keep harmony, add swing rhythm and improvisation
+- **Rock → Electronic**: Preserve energy, replace guitars with synths
+- **Folk → Orchestral**: Expand simple melody into full orchestration
+
+## Melody Preservation
+
+For traditional covers that keep the melody intact, use high cover strength:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="original_pop_song.wav",
+    caption="Acoustic version with fingerpicked guitar, cello, intimate female vocal, raw production",
+    lyrics="[Verse 1]\nSame lyrics as original\n\n[Chorus]\nOr rewrite with new words",
+    audio_cover_strength=0.9,  # High strength preserves melody
+)
+```
+
+<Note>
+You can **change lyrics** while keeping melody. The model aligns new lyrics to the original melodic structure.
+</Note>
+
+## Cover with Reference Audio
+
+You can use **both** `src_audio` (for structure) and `reference_audio` (for timbre) together:
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="song_to_cover.wav",        # Structure source
+    reference_audio="style_reference.wav",  # Timbre reference
+    caption="Dreamy indie pop with reverb-heavy guitars, ethereal vocals",
+    audio_cover_strength=0.7,
+)
+```
+
+**How This Works:**
+
+- `src_audio` provides melodic structure and composition
+- `reference_audio` provides acoustic features (timbre, mixing style, production)
+- Caption and lyrics guide the final interpretation
+
+## Remix Creation
+
+Create remixes by modifying Caption and Lyrics:
+
+### Change Genre
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="original_ballad.wav",
+    caption="EDM festival banger with massive synth drops, pumping bass, energetic build-ups",
+    lyrics="[Intro - build]\n\n[Drop - explosive]\nSame lyrics but high energy\n\n[Breakdown]\n\n[Final Drop]",
+    audio_cover_strength=0.5,  # Moderate for remix
+)
+```
+
+### Change Mood
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="upbeat_song.wav",
+    caption="Melancholic version with slow piano, sad strings, breathy vocals, intimate atmosphere",
+    bpm=65,  # Slow down from original
+    audio_cover_strength=0.8,
+)
+```
+
+### Change Language
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="english_song.wav",
+    caption="J-pop with bright synths, upbeat energy, cheerful female vocal",
+    lyrics="[Verse 1]\n日本語の歌詞\nここに書く\n\n[Chorus]\n明るくて楽しい",
+    vocal_language="ja",
+    audio_cover_strength=0.85,
+)
+```
+
+## Advanced Cover Techniques
+
+### 1. Multi-Version Covers
+
+Generate multiple interpretations in one batch:
+
+```python
+config = GenerationConfig(
+    batch_size=8,
+    use_random_seed=True,
+)
+```
+
+Each version will have different production details while maintaining structure.
+
+### 2. Building Complex Structures
+
+Use covers to build complex arrangements:
+
+```python
+# Step 1: Create basic structure
+params_v1 = GenerationParams(
+    task_type="text2music",
+    caption="Simple piano melody",
+    duration=60,
+)
+
+# Step 2: Cover with full arrangement
+params_v2 = GenerationParams(
+    task_type="cover",
+    src_audio="simple_piano.wav",
+    caption="Full band arrangement with drums, bass, guitars, keys",
+    audio_cover_strength=0.7,
+)
+```
+
+### 3. Progressive Transformation
+
+Create a transformation chain:
+
+```python
+# Original → Jazz → Electronic → Orchestral
+steps = [
+    {"caption": "Jazz with saxophone and walking bass", "strength": 0.4},
+    {"caption": "Electronic with synths and beats", "strength": 0.4},
+    {"caption": "Orchestral with strings and brass", "strength": 0.5},
+]
+
+for i, step in enumerate(steps):
+    params = GenerationParams(
+        task_type="cover",
+        src_audio=f"step_{i}.wav",
+        caption=step["caption"],
+        audio_cover_strength=step["strength"],
+    )
+    # Generate and save to step_{i+1}.wav
+```
+
+## Cover vs. Reference Audio
+
+### When to Use Cover (src_audio)
+
+- You want to maintain **melodic structure**
+- Creating a **traditional cover** or remix
+- **Style transfer** with structural preservation
+- Building **variations** of existing songs
+
+### When to Use Reference Audio
+
+- You want to **match timbre/production style** only
+- Creating **new compositions** with similar sound
+- **Timbre cloning** for text-to-music tasks
+- No need to preserve melody or structure
+
+<Tip>
+You can use **both** together: `src_audio` for structure + `reference_audio` for timbre.
+</Tip>
+
+## Cover Generation Tips
+
+### 1. Match Metadata to Source
+
+Extract metadata from source audio first:
+
+```python
+# Use audio understanding feature (if available)
+# Or manually specify metadata that matches source
+params = GenerationParams(
+    task_type="cover",
+    src_audio="source.wav",
+    bpm=120,  # Match source BPM
+    keyscale="C Major",  # Match source key
+    audio_cover_strength=0.8,
+)
+```
+
+### 2. Caption Consistency
+
+Ensure caption doesn't conflict with source audio characteristics:
+
+```
+❌ Bad: Source is slow ballad, caption says "fast-paced energetic"
+✅ Good: Adjust BPM or use moderate cover_strength to allow change
+```
+
+### 3. Iterative Refinement
+
+1. Start with moderate strength (0.6-0.7)
+2. Adjust based on results
+3. Increase strength if too different from source
+4. Decrease strength if too similar
+
+### 4. Quality Source Audio
+
+Best results with:
+- Clean, high-quality source files
+- Clear melodic and rhythmic structure
+- Minimal distortion or artifacts
+
+## Generation Examples
+
+### Example 1: Acoustic Cover of Pop Song
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="pop_song.wav",
+    caption="Intimate acoustic cover with fingerpicked guitar, soft cello, warm female vocal, studio recording",
+    lyrics="[Verse 1]\nKeeping original lyrics\nOr write your own\n\n[Chorus]\nWith same melodic structure",
+    audio_cover_strength=0.85,
+)
+```
+
+### Example 2: Classical to Electronic
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="beethoven.wav",
+    caption="Electronic reinterpretation with glitchy synths, dubstep bass, modern production",
+    lyrics="[Instrumental]",
+    instrumental=True,
+    audio_cover_strength=0.3,  # Low for style transfer
+)
+```
+
+### Example 3: Language Translation Cover
+
+```python
+params = GenerationParams(
+    task_type="cover",
+    src_audio="english_ballad.wav",
+    caption="Spanish version with flamenco guitar, passionate male vocal, emotional delivery",
+    lyrics="[Verso 1]\nLetras en español\nMantiendo la melodía\n\n[Coro]\nCon la misma estructura",
+    vocal_language="es",
+    audio_cover_strength=0.8,
+)
+```
+
+## Troubleshooting
+
+### Issue: Cover Too Different from Source
+
+**Solution:** Increase `audio_cover_strength` to 0.8-1.0
+
+### Issue: Cover Too Similar to Source
+
+**Solution:** Decrease `audio_cover_strength` to 0.3-0.5 or write more contrasting caption
+
+### Issue: Melody Not Preserved
+
+**Solution:**
+- Increase `audio_cover_strength`
+- Ensure BPM and key match source
+- Check source audio quality
+
+### Issue: Style Not Changing
+
+**Solution:**
+- Decrease `audio_cover_strength`
+- Write more specific, contrasting caption
+- Consider adding `reference_audio` with target style
+
+## Related Features
+
+- [Text-to-Music Generation](/features/text-to-music) — Create original compositions
+- [Audio Editing](/features/audio-editing) — Repaint specific sections
+- [Multi-track Generation](/features/multi-track) — Add or extract layers
+
+## API Reference
+
+For programmatic access, see:
+
+- Python API: `/home/daytona/workspace/source/docs/en/INFERENCE.md`
+- REST API: `/home/daytona/workspace/source/docs/en/API.md`
+- Gradio UI: `/home/daytona/workspace/source/docs/en/GRADIO_GUIDE.md`

@@ -1,0 +1,331 @@
+---
+title: System Architecture
+description: Understanding ACE-Step 1.5's hybrid LM+DiT architecture and design principles
+---
+
+## Overview
+
+ACE-Step 1.5 employs a novel **hybrid architecture** where a Language Model (LM) and Diffusion Transformer (DiT) work together to generate high-quality music from text prompts. This design separates planning from execution, allowing each component to excel at what it does best.
+
+## Architecture Diagram
+
+```
+User Input → [5Hz LM] → Semantic Blueprint → [DiT] → Audio Output
+              ↓
+         Metadata Inference
+         Caption Optimization
+         Structure Planning
+         Semantic Codes
+```
+
+## Core Components
+
+### 5Hz Language Model (LM) - The Planner
+
+The LM serves as an "omni-capable planner" that transforms user intent into actionable generation plans:
+
+**Responsibilities:**
+- **Chain-of-Thought Reasoning**: Infers music metadata (BPM, key, time signature, duration) through multi-step reasoning
+- **Caption Optimization**: Expands and enriches user descriptions with musical vocabulary
+- **Structure Planning**: Organizes song structure from simple prompts to complex compositions (10 seconds to 10 minutes)
+- **Semantic Code Generation**: Produces intermediate representations containing melody, orchestration, and partial timbre information
+- **Audio Understanding**: Analyzes reference audio to extract musical characteristics
+
+**Key Features:**
+- Based on Qwen architecture (0.6B, 1.7B, 4B parameter variants)
+- Supports 50+ languages for lyrics and prompts
+- Pretrained on music-specific data with SFT and RL fine-tuning
+- **Optional component** - can be disabled for direct DiT control
+
+**When LM is Not Used:**
+- Cover mode (reference audio provides structure)
+- Repaint mode (context-based local edits)
+- Expert workflows where users provide explicit semantic codes
+
+### Diffusion Transformer (DiT) - The Executor
+
+The DiT is the "audio craftsman" that generates actual waveforms:
+
+**Responsibilities:**
+- Receives semantic codes and conditions from LM (or direct user input)
+- Gradually "denoises" audio from random noise through iterative refinement
+- Controls final timbre, mixing, spatial characteristics, and audio quality
+- Supports multiple generation modes: text2music, cover, repaint, extract, lego, complete
+
+**Architecture Details:**
+- Transformer-based diffusion model operating on latent audio representations
+- Uses Finite Scalar Quantization (FSQ) for semantic token encoding
+- Sliding window attention for efficient long-sequence processing
+- Integrated text encoder (1024-dim) and lyric encoder (8 layers)
+- Timbre encoder (64-dim, 4 layers) for reference audio processing
+- Patch-based processing (patch_size=2) for efficient computation
+
+**Model Variants:**
+- **Base**: 50 steps, CFG support, all tasks (extract/lego/complete)
+- **SFT**: 50 steps, CFG support, improved semantic parsing
+- **Turbo**: 8 steps (distilled), no CFG, fastest generation
+- **Turbo-RL**: 8 steps with reinforcement learning, highest quality
+
+### Variational Autoencoder (VAE)
+
+The VAE bridges raw audio and latent representations:
+
+**Encoding:**
+- Converts 48kHz stereo audio to compressed latent codes
+- Tiled encoding for long audio sequences
+- Enables efficient diffusion in latent space
+
+**Decoding:**
+- Converts DiT-generated latents back to audio waveforms
+- Adaptive tiling based on available VRAM
+- Three-tier fallback: GPU tiled → GPU with CPU offload → full CPU
+
+## Hybrid Architecture Benefits
+
+### Why This Design?
+
+Traditional text-to-audio diffusion models suffer from vague text-to-audio mappings. ACE-Step's hybrid approach solves this by:
+
+1. **Semantic Bottleneck**: LM creates structured semantic codes that provide clearer guidance than raw text
+2. **Separation of Concerns**: LM handles world knowledge and planning; DiT handles audio generation
+3. **Intrinsic Alignment**: RL training uses only internal model signals, avoiding biases from external reward models
+4. **Flexibility**: Users can bypass LM and control DiT directly when needed
+
+### Chain-of-Thought (CoT) Reasoning
+
+The LM employs multi-step reasoning to:
+- Analyze user intent and musical context
+- Infer appropriate metadata ("upbeat pop song" → BPM ~120-130, 4/4 time)
+- Expand simple descriptions into detailed captions
+- Generate coherent semantic codes that guide DiT generation
+
+**Example CoT Flow:**
+```
+Input: "sad piano ballad"
+
+LM Reasoning:
+1. Style: ballad → slow tempo, emotional delivery
+2. Instrument: piano → suggests intimate atmosphere
+3. Emotion: sad → minor key likely, slower BPM
+4. Infer metadata: BPM ~60-70, time signature 4/4, key Am or Dm
+5. Expand caption: "melancholic piano ballad with female breathy vocal, 
+   intimate atmosphere, strings, building to powerful chorus"
+6. Generate semantic codes encoding melody structure
+```
+
+### Intrinsic Reinforcement Learning
+
+ACE-Step uses a unique RL approach that:
+- Relies solely on internal model mechanisms (no external reward models)
+- Avoids human preference biases and dataset limitations
+- Aligns LM and DiT outputs through self-supervised signals
+- Enables the model to develop its own quality standards
+
+**Benefits:**
+- No dependence on potentially biased human annotations
+- More robust generalization to diverse musical styles
+- Continuous improvement through internal consistency metrics
+
+## System Components
+
+### Handler Architecture
+
+The system uses separate handlers for modularity:
+
+**AceStepHandler (DiT Handler):**
+- Manages DiT model loading and inference
+- Handles VAE encoding/decoding
+- Coordinates text encoding and timbre processing
+- Implements adaptive VRAM management
+
+**LLMHandler (LM Handler):**
+- Manages LM model loading (PyTorch, vLLM, or MLX backend)
+- Implements CoT reasoning and constrained decoding
+- Handles caption rewriting and metadata inference
+- Supports audio understanding capabilities
+
+**DatasetHandler:**
+- Manages training data for LoRA fine-tuning
+- Handles audio annotation and preprocessing
+- Organizes datasets for custom model training
+
+### Pipeline Integration
+
+The `AceStepV15Pipeline` orchestrates all components:
+
+1. **Input Processing**: Validates and normalizes user inputs (text, audio, metadata)
+2. **LM Planning** (if enabled): CoT reasoning → semantic codes + metadata
+3. **DiT Generation**: Diffusion process in latent space
+4. **VAE Decoding**: Latent codes → audio waveforms
+5. **Post-processing**: Quality scoring, format conversion, metadata embedding
+
+## Generation Flow
+
+### Standard Text-to-Music Flow
+
+```
+1. User provides caption, lyrics, and optional metadata
+   ↓
+2. LM (if enabled):
+   - Rewrites caption for clarity
+   - Infers missing metadata (BPM, key, duration)
+   - Generates semantic codes
+   ↓
+3. DiT:
+   - Encodes text and lyric conditions
+   - Processes reference audio (if provided) via timbre encoder
+   - Runs diffusion process (8-50 steps depending on model)
+   - Outputs latent audio representation
+   ↓
+4. VAE:
+   - Decodes latents to 48kHz stereo audio
+   - Applies tiling for long sequences
+   ↓
+5. Post-processing:
+   - Quality scoring (optional)
+   - Format conversion (WAV, MP3)
+   - LRC generation for lyrics (optional)
+```
+
+### Alternative Flows
+
+**Cover Mode** (no LM needed):
+```
+Source audio → VAE encode → Semantic codes → DiT + new caption → VAE decode → Remixed audio
+```
+
+**Repaint Mode** (no LM needed):
+```
+Source audio + time range + new caption → DiT context-aware generation → Modified audio
+```
+
+**Base Model Advanced Tasks:**
+- **Extract**: Separate stems from mixed audio
+- **Lego**: Add new instrumental layers to existing tracks
+- **Complete**: Generate full accompaniment for vocals
+
+## Platform Support
+
+ACE-Step 1.5 supports multiple hardware backends:
+
+| Platform | Backend | LM Backend | Notes |
+|----------|---------|------------|-------|
+| NVIDIA GPU | CUDA | vLLM / PyTorch | Recommended, best performance |
+| AMD GPU | ROCm | vLLM / PyTorch | Requires ROCm 6.0+ |
+| Intel GPU | XPU | PyTorch | Via Intel Extension for PyTorch |
+| Apple Silicon | MPS | MLX / PyTorch | MLX provides native acceleration |
+| CPU | CPU | PyTorch | Slowest, for compatibility only |
+
+<Info>
+  ACE-Step automatically detects your hardware and selects the optimal backend configuration.
+</Info>
+
+## Memory Management
+
+The system implements adaptive strategies based on available VRAM:
+
+**Model Offloading:**
+- **No offload** (≥20GB): All models stay on GPU
+- **CPU offload** (12-20GB): VAE and text encoder offload when idle
+- **CPU + DiT offload** (≤12GB): All models offload between operations
+
+**Quantization:**
+- INT8 quantization enabled by default for GPUs ≤16GB
+- Reduces VRAM usage by ~40% with minimal quality impact
+- Requires `torch.compile` for implementation
+
+**Adaptive VAE Decoding:**
+- Chunk size adjusts automatically (64-1536 frames)
+- Fallback cascade prevents OOM errors
+- Maintains quality while respecting VRAM limits
+
+<Check>
+  See [GPU Compatibility](/concepts/gpu-compatibility) for detailed VRAM requirements and tier configurations.
+</Check>
+
+## Design Philosophy
+
+### Human-Centered Generation
+
+ACE-Step prioritizes **human-in-the-loop creativity** over one-click generation:
+
+- **Iterative workflow**: Generate → Listen → Adjust → Regenerate
+- **Multiple control levels**: From simple prompts to fine-grained semantic codes
+- **Fast iteration**: &lt;2s per song on A100, &lt;10s on RTX 3090
+- **Local ownership**: Open-source, fully runnable offline
+
+### The Elephant Rider Metaphor
+
+The model is like an elephant you guide, not a servant you command:
+
+- **Accept uncertainty**: Randomness enables exploration and creativity
+- **Embrace iteration**: Multiple generations reveal the creative space
+- **Guide, don't dictate**: Provide direction while allowing model freedom
+- **Learn the elephant**: Understanding model behavior improves results over time
+
+<Note>
+  This design philosophy shapes every aspect of ACE-Step's architecture - from the optional LM to the fast inference enabling rapid iteration.
+</Note>
+
+## Technical Specifications
+
+### DiT Model Configuration (Turbo)
+
+```python
+{
+  "hidden_size": 2048,
+  "num_hidden_layers": 24,
+  "num_attention_heads": 16,
+  "num_key_value_heads": 8,
+  "intermediate_size": 6144,
+  "text_hidden_dim": 1024,
+  "num_lyric_encoder_hidden_layers": 8,
+  "timbre_hidden_dim": 64,
+  "num_timbre_encoder_hidden_layers": 4,
+  "fsq_dim": 2048,
+  "fsq_input_levels": [8, 8, 8, 5, 5, 5],
+  "in_channels": 192,
+  "patch_size": 2,
+  "use_sliding_window": true,
+  "sliding_window": 128
+}
+```
+
+### LM Model Configuration (1.7B)
+
+- Base model: Qwen3-1.7B
+- Context length: 32K tokens
+- Vocabulary: 64K tokens
+- RoPE theta: 1M (extended context)
+- Attention: Grouped Query Attention (GQA)
+- Activation: SiLU
+
+## Performance Characteristics
+
+| Configuration | A100 (40GB) | RTX 3090 (24GB) | RTX 3060 (12GB) |
+|---------------|-------------|-----------------|------------------|
+| Turbo + 4B LM | 0.5-2s | 2-5s | 8-15s |
+| Turbo + 1.7B LM | 0.5-1.5s | 2-4s | 6-12s |
+| Turbo + No LM | 0.3-1s | 1-3s | 4-8s |
+| SFT + 1.7B LM | 2-8s | 8-20s | 30-60s |
+
+<Info>
+  Times are for 30-second audio generation. Actual performance varies with duration, batch size, and hardware configuration.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Model Zoo" icon="layer-group" href="/concepts/models">
+    Explore available DiT and LM models with detailed specifications
+  </Card>
+  <Card title="Generation Process" icon="wand-magic-sparkles" href="/concepts/generation-process">
+    Learn how music generation works step-by-step
+  </Card>
+  <Card title="GPU Compatibility" icon="microchip" href="/concepts/gpu-compatibility">
+    Check VRAM requirements and platform support
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/installation">
+    Install and run ACE-Step 1.5
+  </Card>
+</CardGroup>

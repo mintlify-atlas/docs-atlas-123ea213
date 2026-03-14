@@ -1,0 +1,447 @@
+---
+title: Audio Editing
+description: Selective audio editing with Repaint, Lego, Extract, and Complete modes
+---
+
+# Audio Editing
+
+ACE-Step 1.5 provides powerful audio editing capabilities through the **Repaint** task and advanced **Base model** tasks, enabling selective editing, extension, and multi-track manipulation.
+
+## Repaint: Selective Region Editing
+
+Repaint allows you to modify specific time ranges in existing audio while maintaining context and natural transitions.
+
+### How Repaint Works
+
+Repaint uses **context-based completion**:
+
+1. You specify a time range to edit (start, end)
+2. The model references surrounding context
+3. DiT regenerates the specified region
+4. Seamless transitions preserve natural flow
+
+<Note>
+Repaint can modify **beginning**, **middle**, **end**, or **any region** from 3 seconds to 90 seconds.
+</Note>
+
+### Basic Repaint Workflow
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="original_song.wav",
+    caption="Upbeat pop with bright synths, energetic vocals",
+    lyrics="[Chorus]\nNew lyrics for this section\nWith updated content",
+    repainting_start=30.0,  # Start at 30 seconds
+    repainting_end=45.0,    # End at 45 seconds
+    thinking=False,  # Repaint skips LM
+)
+
+config = GenerationConfig(
+    batch_size=4,  # Try multiple variations
+    audio_format="flac"
+)
+
+result = generate_music(dit_handler, llm_handler, params, config)
+```
+
+## Repaint Use Cases
+
+### 1. Local Modification
+
+Change content in a specific section:
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song.wav",
+    caption="Rock with electric guitar solo, powerful drums",
+    lyrics="[Guitar Solo - shredding]",
+    repainting_start=60.0,
+    repainting_end=75.0,
+)
+```
+
+### 2. Lyric Changes
+
+Maintain melody and orchestration, only change lyrics:
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song.wav",
+    caption="Pop ballad with piano and strings, emotional female vocal",  # Match existing style
+    lyrics="[Verse 2]\nCompletely new lyrics\nBut same melodic structure\nAnd vocal style",
+    repainting_start=45.0,
+    repainting_end=75.0,
+)
+```
+
+### 3. Structure Changes
+
+Change section type (e.g., Verse to Chorus):
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song.wav",
+    caption="Energetic pop with building intensity",
+    lyrics="[Chorus - anthemic]\nTransform this section\nInto a powerful chorus",
+    repainting_start=30.0,
+    repainting_end=50.0,
+)
+```
+
+### 4. Beginning Extension
+
+Extend the intro or add content before:
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song.wav",
+    caption="Ambient intro with synth pads, building atmosphere",
+    lyrics="[Intro - atmospheric]",
+    repainting_start=0.0,   # From beginning
+    repainting_end=10.0,    # First 10 seconds
+)
+```
+
+### 5. Ending Extension
+
+Continue or modify the outro:
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song.wav",
+    caption="Fading outro with piano and strings, melancholic atmosphere",
+    lyrics="[Outro - fade out]",
+    repainting_start=150.0,  # Near end
+    repainting_end=-1,       # -1 means until end of audio
+)
+```
+
+<Tip>
+Set `repainting_end=-1` to edit from start time to the end of the audio.
+</Tip>
+
+### 6. Timbre Cloning
+
+Clone and extend existing audio characteristics:
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song.wav",
+    caption="",  # Empty to match source timbre
+    lyrics="[Verse 3]\nNew lyrics continuing\nThe same vocal style",
+    repainting_start=90.0,
+    repainting_end=120.0,
+)
+```
+
+## Infinite Duration Generation
+
+Use Repaint to create unlimited length audio:
+
+```python
+# Generate in chunks and extend
+def generate_long_audio(total_duration, chunk_size=60):
+    current_audio = "initial_generation.wav"
+    current_time = 60  # Initial audio length
+    
+    while current_time < total_duration:
+        params = GenerationParams(
+            task_type="repaint",
+            src_audio=current_audio,
+            caption="Continuing same style",
+            lyrics="[Continuing]\nNext section here",
+            repainting_start=current_time - 10,  # 10s overlap
+            repainting_end=current_time + chunk_size,
+        )
+        # Generate and save next chunk
+        result = generate_music(dit_handler, llm_handler, params, config)
+        current_audio = result.audios[0]["path"]
+        current_time += chunk_size
+```
+
+## Intelligent Audio Stitching
+
+Seamlessly connect two different audio files:
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="first_part.wav",  # Contains both parts concatenated
+    caption="Smooth transition between sections",
+    lyrics="[Transition]\nBridge content here",
+    repainting_start=55.0,  # Around the splice point
+    repainting_end=65.0,    # Cover the transition
+)
+```
+
+The model automatically handles:
+- Rhythm alignment
+- Harmonic transitions
+- Timbre blending
+- Natural flow between sections
+
+## Chunk Mask Mode
+
+Control how the model decides what to regenerate:
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song.wav",
+    repainting_start=30.0,
+    repainting_end=45.0,
+    chunk_mask_mode="auto",  # "auto" or "explicit"
+)
+```
+
+| Mode | Behavior |
+|------|----------|
+| **auto** | Model decides what to regenerate (all mask values = 2.0) |
+| **explicit** | Strict 0/1 mask: regenerate only specified range |
+
+**Default: "auto"** — gives model more flexibility for natural transitions.
+
+## Advanced Base Model Tasks
+
+The **Base model** (`acestep-v15-base`) supports additional advanced tasks:
+
+### Extract Task: Track Separation
+
+Extract specific tracks from mixed audio:
+
+```python
+params = GenerationParams(
+    task_type="extract",
+    src_audio="full_mix.wav",
+    caption="Isolated vocals",  # What to extract
+    inference_steps=50,  # Base model uses more steps
+    guidance_scale=7.0,
+)
+```
+
+**Extraction Targets:**
+- Vocals (lead vocals, harmonies)
+- Drums (kick, snare, hi-hat)
+- Bass (bass guitar, synth bass)
+- Guitars
+- Keys/Piano
+- Strings
+- Brass
+
+### Lego Task: Add New Tracks
+
+Intelligently add new instrument tracks to existing audio:
+
+```python
+params = GenerationParams(
+    task_type="lego",
+    src_audio="vocals_only.wav",
+    caption="Add drums, bass, and electric guitar",
+    lyrics="",  # Usually empty for lego
+    repainting_start=0.0,    # Time range for new track
+    repainting_end=60.0,
+    inference_steps=50,
+)
+```
+
+**How Lego Works:**
+
+1. Model analyzes existing tracks (vocals, instruments)
+2. Generates new tracks that coordinate:
+   - Rhythm matches existing timing
+   - Harmony follows chord progression
+   - Style matches overall production
+3. New tracks blend naturally with source
+
+### Complete Task: Add Full Accompaniment
+
+Generate complete mixed accompaniment for single tracks:
+
+```python
+params = GenerationParams(
+    task_type="complete",
+    src_audio="acapella_vocal.wav",
+    caption="Full band arrangement: drums, bass, guitar, keys, strings",
+    inference_steps=50,
+)
+```
+
+**Complete vs. Lego:**
+
+| Task | Input | Output |
+|------|-------|--------|
+| **Complete** | Single track (e.g., vocals) | Full mixed accompaniment |
+| **Lego** | Existing tracks | One new track added |
+
+<Warning>
+Extract, Lego, and Complete tasks are **only available with the Base model** (`acestep-v15-base`). They don't work with Turbo or SFT models.
+</Warning>
+
+## Multi-Part Editing (Lego)
+
+Edit multiple regions with different operations:
+
+```python
+# Step 1: Edit intro
+params_1 = GenerationParams(
+    task_type="repaint",
+    src_audio="original.wav",
+    caption="Ambient intro",
+    repainting_start=0.0,
+    repainting_end=15.0,
+)
+
+# Step 2: Edit chorus on result from step 1
+params_2 = GenerationParams(
+    task_type="repaint",
+    src_audio="after_step1.wav",
+    caption="Powerful chorus",
+    repainting_start=45.0,
+    repainting_end=60.0,
+)
+
+# Step 3: Edit outro
+params_3 = GenerationParams(
+    task_type="repaint",
+    src_audio="after_step2.wav",
+    caption="Fade out ending",
+    repainting_start=120.0,
+    repainting_end=-1,
+)
+```
+
+## Repaint Best Practices
+
+### 1. Time Range Selection
+
+- **Minimum range:** 3 seconds (avoid too short)
+- **Maximum range:** 90 seconds (avoid too long)
+- **Optimal range:** 10-30 seconds for best control
+- **Add overlap:** Include 2-5 seconds before/after for smooth transitions
+
+### 2. Caption Consistency
+
+Match the caption to existing audio style for seamless integration:
+
+```
+❌ Bad: Source is acoustic, caption says "heavy electronic"
+✅ Good: Caption matches timbre and style of surrounding audio
+```
+
+### 3. Lyrics Alignment
+
+Ensure syllable count and rhythm match the time range:
+
+```python
+# 15-second range, roughly 6-8 words per line
+lyrics = """[Verse 2]
+Walking through the empty streets  # ~6 syllables
+Echoes follow where I go          # ~7 syllables
+Looking for a place to rest       # ~6 syllables
+"""
+```
+
+### 4. Context Preservation
+
+Leave context on both sides of the edit:
+
+```python
+# Don't edit 0-60 if you want to preserve intro
+# Better: Edit 10-50, leaving 10s context on each side
+repainting_start=10.0
+repainting_end=50.0
+```
+
+## Repaint Examples
+
+### Example 1: Fix a Bad Section
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="song_with_issue.wav",
+    caption="Clean pop production, clear female vocal, bright synths",
+    lyrics="[Verse 2]\nBetter lyrics here\nCleaner delivery",
+    repainting_start=45.0,
+    repainting_end=60.0,
+)
+```
+
+### Example 2: Extend Song Length
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="short_song.wav",
+    caption="Continuing same style and energy",
+    lyrics="[Bridge]\nNew section to extend\nThe song naturally\n\n[Final Chorus]\nBringing it to conclusion",
+    repainting_start=90.0,  # Current end
+    repainting_end=150.0,   # New end
+)
+```
+
+### Example 3: Create Variation
+
+```python
+params = GenerationParams(
+    task_type="repaint",
+    src_audio="original.wav",
+    caption="Alternative chorus with different melody",
+    lyrics="[Chorus - variant]\nSame words but different\nMelodic interpretation",
+    repainting_start=30.0,
+    repainting_end=45.0,
+)
+```
+
+## Troubleshooting
+
+### Issue: Abrupt Transitions
+
+**Solution:**
+- Increase overlap with surrounding audio
+- Use `chunk_mask_mode="auto"` for smoother blending
+- Ensure caption matches surrounding style
+
+### Issue: Context Not Preserved
+
+**Solution:**
+- Don't edit too close to edges (leave 5-10s buffer)
+- Check that time range is within audio duration
+- Ensure caption matches overall song style
+
+### Issue: Lyrics Don't Fit Time Range
+
+**Solution:**
+- Adjust syllable count to match range duration
+- Use structure tags to guide pacing
+- Check that BPM matches source audio
+
+### Issue: Style Changed Too Much
+
+**Solution:**
+- Write caption that closely matches source style
+- Leave caption empty to let model match context
+- Reduce time range for smaller changes
+
+## Related Features
+
+- [Text-to-Music Generation](/features/text-to-music) — Create original compositions
+- [Cover Generation](/features/cover-generation) — Style transfer and remixes
+- [Multi-track Generation](/features/multi-track) — Vocal2BGM and layer control
+
+## API Reference
+
+For programmatic access, see:
+
+- Python API: `/home/daytona/workspace/source/docs/en/INFERENCE.md`
+- REST API: `/home/daytona/workspace/source/docs/en/API.md`
+- Gradio UI: `/home/daytona/workspace/source/docs/en/GRADIO_GUIDE.md`

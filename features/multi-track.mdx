@@ -1,0 +1,504 @@
+---
+title: Multi-track Generation
+description: Track separation, layer stacking, and Vocal2BGM with ACE-Step 1.5
+---
+
+# Multi-track Generation
+
+ACE-Step 1.5 provides multi-track capabilities for professional music production workflows, including track separation, layer addition, and automatic accompaniment generation.
+
+## Overview
+
+Multi-track features enable:
+
+- **Track Separation**: Extract individual instruments from mixed audio
+- **Layer Stacking**: Add new instrument layers to existing tracks
+- **Vocal2BGM**: Automatically generate accompaniment for vocals
+- **Professional Mixing**: Control individual track elements
+
+<Warning>
+Advanced multi-track features (Extract, Lego, Complete) require the **Base model** (`acestep-v15-base`). They are not available in Turbo or SFT models.
+</Warning>
+
+## Track Separation (Extract)
+
+Extract individual instrument tracks from mixed audio:
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+params = GenerationParams(
+    task_type="extract",
+    src_audio="full_mix.wav",
+    caption="Isolated lead vocals",  # What to extract
+    inference_steps=50,  # Base model requires more steps
+    guidance_scale=7.0,
+)
+
+config = GenerationConfig(
+    batch_size=1,
+    audio_format="wav",  # Use WAV for stems
+)
+
+result = generate_music(dit_handler, llm_handler, params, config)
+```
+
+### Extraction Targets
+
+You can extract any instrument or vocal element:
+
+| Category | Examples |
+|----------|----------|
+| **Vocals** | "lead vocals", "harmony vocals", "background vocals", "choir" |
+| **Drums** | "drums", "kick drum", "snare", "hi-hat", "cymbals", "percussion" |
+| **Bass** | "bass", "bass guitar", "synth bass", "sub bass" |
+| **Guitars** | "electric guitar", "acoustic guitar", "guitar solo", "rhythm guitar" |
+| **Keys** | "piano", "synth", "organ", "pads", "lead synth" |
+| **Orchestral** | "strings", "violin", "cello", "brass", "trumpet", "saxophone" |
+
+### Extract Multiple Tracks
+
+```python
+# Extract each track separately
+tracks_to_extract = [
+    "lead vocals",
+    "drums",
+    "bass",
+    "guitar",
+    "piano",
+]
+
+extracted_stems = {}
+for track_name in tracks_to_extract:
+    params = GenerationParams(
+        task_type="extract",
+        src_audio="full_mix.wav",
+        caption=f"Isolated {track_name}",
+        inference_steps=50,
+    )
+    result = generate_music(dit_handler, llm_handler, params, config)
+    extracted_stems[track_name] = result.audios[0]["path"]
+```
+
+## Layer Addition (Lego)
+
+Add new instrument tracks to existing audio, similar to Suno Studio's "Add Layer" feature:
+
+```python
+params = GenerationParams(
+    task_type="lego",
+    src_audio="existing_tracks.wav",  # What you already have
+    caption="Add energetic drums and bass guitar",  # What to add
+    repainting_start=0.0,
+    repainting_end=60.0,  # Time range for new track
+    inference_steps=50,
+)
+```
+
+### How Lego Works
+
+1. **Analyze existing tracks** — Model identifies rhythm, harmony, structure
+2. **Generate compatible tracks** — New instruments match:
+   - Beat and tempo of existing drums
+   - Chord progression from existing harmony
+   - Overall production style and mixing
+3. **Blend naturally** — Output integrates seamlessly
+
+### Lego Use Cases
+
+#### 1. Build Arrangement Progressively
+
+```python
+# Start with vocals
+step1 = generate_vocals()  # text2music with vocals only
+
+# Add drums
+params_drums = GenerationParams(
+    task_type="lego",
+    src_audio="vocals.wav",
+    caption="Add punchy drums with kick, snare, hi-hat",
+    repainting_start=0.0,
+    repainting_end=-1,
+)
+
+# Add bass
+params_bass = GenerationParams(
+    task_type="lego",
+    src_audio="vocals_drums.wav",
+    caption="Add groovy bass guitar",
+    repainting_start=0.0,
+    repainting_end=-1,
+)
+
+# Add guitars
+params_guitar = GenerationParams(
+    task_type="lego",
+    src_audio="vocals_drums_bass.wav",
+    caption="Add electric guitars with rhythm and lead",
+    repainting_start=0.0,
+    repainting_end=-1,
+)
+```
+
+#### 2. Add Solo Sections
+
+```python
+params = GenerationParams(
+    task_type="lego",
+    src_audio="song_without_solo.wav",
+    caption="Add guitar solo with expressive lead playing",
+    repainting_start=60.0,  # Solo section
+    repainting_end=90.0,
+    inference_steps=50,
+)
+```
+
+#### 3. Enhance Sparse Arrangements
+
+```python
+params = GenerationParams(
+    task_type="lego",
+    src_audio="minimal_track.wav",
+    caption="Add lush string section and atmospheric pads",
+    repainting_start=0.0,
+    repainting_end=-1,
+)
+```
+
+## Complete: Full Accompaniment Generation
+
+Generate complete mixed accompaniment for single tracks (often vocals):
+
+```python
+params = GenerationParams(
+    task_type="complete",
+    src_audio="acapella_vocals.wav",
+    caption="Full pop arrangement: drums, bass, piano, synths, guitar",
+    inference_steps=50,
+    guidance_scale=7.0,
+)
+```
+
+### Complete vs. Lego
+
+| Feature | Lego | Complete |
+|---------|------|----------|
+| **Input** | Existing mixed tracks | Single track (usually vocals) |
+| **Output** | One new track added | Full mixed accompaniment |
+| **Control** | Add specific instruments | Generate everything at once |
+| **Use Case** | Layer-by-layer building | Quick full arrangement |
+
+### Complete Task Examples
+
+#### Example 1: Acapella to Full Song
+
+```python
+params = GenerationParams(
+    task_type="complete",
+    src_audio="acapella.wav",
+    caption="Upbeat pop with synth leads, driving drums, funky bass, bright production",
+    bpm=120,
+    keyscale="C Major",
+    inference_steps=50,
+)
+```
+
+#### Example 2: Piano Demo to Full Production
+
+```python
+params = GenerationParams(
+    task_type="complete",
+    src_audio="piano_demo.wav",
+    caption="Full band arrangement: drums, bass guitar, electric guitar, strings",
+    inference_steps=50,
+)
+```
+
+## Vocal2BGM: Vocal to Background Music
+
+Vocal2BGM is a specialized use case of the Complete task for generating accompaniment:
+
+```python
+params = GenerationParams(
+    task_type="complete",
+    src_audio="vocal_track.wav",
+    caption="Matching accompaniment: acoustic guitar, soft drums, bass, subtle strings",
+    # Leave other metadata empty or let model infer from vocals
+    inference_steps=50,
+)
+```
+
+### Vocal2BGM Best Practices
+
+1. **Match Vocal Style** — Caption should complement vocal characteristics:
+   ```python
+   # For soft vocals:
+   caption="Gentle acoustic accompaniment with fingerpicked guitar, soft brush drums"
+   
+   # For powerful vocals:
+   caption="Energetic band arrangement with driving drums, electric guitar, strong bass"
+   ```
+
+2. **Preserve Vocal Space** — Avoid overcrowding:
+   ```python
+   caption="Sparse arrangement with space for vocals: minimal drums, simple bass, pad synths"
+   ```
+
+3. **Set Appropriate Metadata**:
+   ```python
+   params = GenerationParams(
+       task_type="complete",
+       src_audio="vocals.wav",
+       caption="...",
+       bpm=85,  # Match vocal tempo
+       keyscale="G Major",  # Match vocal key
+   )
+   ```
+
+## Track Stacking Workflow
+
+Professional multi-track production workflow:
+
+```python
+# Step 1: Generate or import vocal track
+vocals = "vocals.wav"
+
+# Step 2: Add rhythm section
+params_drums = GenerationParams(
+    task_type="lego",
+    src_audio=vocals,
+    caption="Tight drums with kick, snare, hi-hat, groove-oriented",
+    repainting_start=0.0,
+    repainting_end=-1,
+)
+vocals_drums = generate_and_save(params_drums)
+
+# Step 3: Add bass
+params_bass = GenerationParams(
+    task_type="lego",
+    src_audio=vocals_drums,
+    caption="Funky bass guitar, locked with drums",
+    repainting_start=0.0,
+    repainting_end=-1,
+)
+vocals_drums_bass = generate_and_save(params_bass)
+
+# Step 4: Add harmonic elements
+params_keys = GenerationParams(
+    task_type="lego",
+    src_audio=vocals_drums_bass,
+    caption="Warm electric piano, jazz chords",
+    repainting_start=0.0,
+    repainting_end=-1,
+)
+full_mix = generate_and_save(params_keys)
+```
+
+## Layer Control Techniques
+
+### 1. Extract-Edit-Reintegrate
+
+```python
+# Extract problem track
+params_extract = GenerationParams(
+    task_type="extract",
+    src_audio="full_mix.wav",
+    caption="Isolated drums",
+)
+drums_only = extract_track(params_extract)
+
+# Edit drums with Repaint
+params_edit = GenerationParams(
+    task_type="repaint",
+    src_audio=drums_only,
+    caption="More energetic drums with fills",
+    repainting_start=30.0,
+    repainting_end=45.0,
+)
+edited_drums = repaint_track(params_edit)
+
+# Re-add edited drums
+params_lego = GenerationParams(
+    task_type="lego",
+    src_audio="mix_without_drums.wav",
+    caption="Add edited drums back",
+    reference_audio=edited_drums,
+)
+final_mix = add_layer(params_lego)
+```
+
+### 2. Selective Enhancement
+
+```python
+# Extract specific element
+vocals = extract_track(src="mix.wav", caption="vocals")
+
+# Generate enhanced accompaniment
+params_complete = GenerationParams(
+    task_type="complete",
+    src_audio=vocals,
+    caption="Richer arrangement with orchestral strings, expanded instrumentation",
+)
+enhanced_mix = generate_complete(params_complete)
+```
+
+### 3. Remix with Layer Control
+
+```python
+# Extract stems
+vocals = extract_track(caption="vocals")
+drums = extract_track(caption="drums")
+
+# Generate new instrumental layers
+params_new = GenerationParams(
+    task_type="lego",
+    src_audio=vocals,
+    caption="Electronic remix with synth bass, synth leads, electronic drums",
+)
+remix = generate_remix(params_new)
+```
+
+## Multi-track Best Practices
+
+### 1. Track Separation Quality
+
+**For Best Results:**
+- Use high-quality source files (WAV, FLAC)
+- Clear separation between instruments in mix
+- Avoid heavily compressed or lo-fi sources
+
+### 2. Layer Addition Order
+
+Recommended order for building arrangements:
+1. **Vocals** (if present)
+2. **Drums** (establish rhythm)
+3. **Bass** (foundation)
+4. **Harmonic elements** (guitars, keys, pads)
+5. **Melodic elements** (leads, solos)
+6. **Atmosphere** (strings, textures, effects)
+
+### 3. Metadata Consistency
+
+Ensure all layers use consistent metadata:
+```python
+base_params = {
+    "bpm": 120,
+    "keyscale": "C Major",
+    "timesignature": "4",
+}
+
+# Apply to all lego operations
+for layer in layers:
+    params = GenerationParams(
+        task_type="lego",
+        **base_params,
+        caption=layer["caption"],
+    )
+```
+
+### 4. Caption Specificity
+
+Be specific about what to add or extract:
+
+```
+❌ Vague: "Add instruments"
+✅ Specific: "Add funk drums with syncopated hi-hat and punchy kick"
+
+❌ Vague: "Extract rhythm"
+✅ Specific: "Extract kick drum and bass guitar only"
+```
+
+## Advanced Techniques
+
+### 1. Dynamic Layer Addition
+
+Add layers only to specific sections:
+
+```python
+# Add strings only to chorus
+params = GenerationParams(
+    task_type="lego",
+    src_audio="song.wav",
+    caption="Add sweeping string section",
+    repainting_start=45.0,  # Chorus starts
+    repainting_end=75.0,    # Chorus ends
+)
+```
+
+### 2. Stem-Based Mixing
+
+```python
+# Extract all stems
+stems = {
+    "vocals": extract("vocals"),
+    "drums": extract("drums"),
+    "bass": extract("bass"),
+    "guitar": extract("guitar"),
+    "keys": extract("keys"),
+}
+
+# Process each stem individually
+for name, stem_path in stems.items():
+    # Apply effects, edits, etc.
+    processed = process_stem(stem_path)
+    stems[name] = processed
+
+# Rebuild mix with processed stems
+# (requires external mixing/summing)
+```
+
+### 3. Reference-Guided Layer Addition
+
+```python
+params = GenerationParams(
+    task_type="lego",
+    src_audio="vocals_drums.wav",
+    reference_audio="reference_bass.wav",  # Use timbre from reference
+    caption="Add bass guitar matching reference style",
+)
+```
+
+## Troubleshooting
+
+### Issue: Extracted Track Has Bleed
+
+**Solution:**
+- Use higher `guidance_scale` (8.0-10.0)
+- Try multiple extractions and pick cleanest
+- Use better quality source with clear separation
+
+### Issue: Added Layer Doesn't Match
+
+**Solution:**
+- Ensure metadata (BPM, key) matches source
+- Write more specific caption describing style
+- Check that time range is appropriate
+- Try adding reference_audio with target timbre
+
+### Issue: Complete Task Ignores Vocals
+
+**Solution:**
+- Ensure source audio is clean
+- Add explicit caption describing desired accompaniment
+- Try Lego task for more control instead
+
+### Issue: Layers Conflict
+
+**Solution:**
+- Add layers in logical order (rhythm first, then harmony)
+- Ensure caption describes complementary, not competing elements
+- Leave space in arrangement for each layer
+
+## Related Features
+
+- [Audio Editing](/features/audio-editing) — Repaint and selective editing
+- [Cover Generation](/features/cover-generation) — Style transfer and remixes
+- [Text-to-Music Generation](/features/text-to-music) — Create original tracks
+
+## API Reference
+
+For programmatic access, see:
+
+- Python API: `/home/daytona/workspace/source/docs/en/INFERENCE.md`
+- REST API: `/home/daytona/workspace/source/docs/en/API.md`
+- Gradio UI: `/home/daytona/workspace/source/docs/en/GRADIO_GUIDE.md`

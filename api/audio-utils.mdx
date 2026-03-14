@@ -1,0 +1,434 @@
+---
+title: Audio Utilities
+description: Audio saving, normalization, and utility functions
+---
+
+The `audio_utils` module provides utilities for saving, converting, normalizing, and processing audio data.
+
+## AudioSaver Class
+
+### Constructor
+
+```python
+from acestep.audio_utils import AudioSaver
+
+saver = AudioSaver(default_format="flac")
+```
+
+**Parameters:**
+
+<ParamField path="default_format" type="str" default="'flac'">
+  Default save format. Options: `"flac"`, `"wav"`, `"mp3"`, `"wav32"`, `"opus"`, `"aac"`.
+</ParamField>
+
+### save_audio()
+
+```python
+def save_audio(
+    audio_data: Union[torch.Tensor, np.ndarray],
+    output_path: Union[str, Path],
+    sample_rate: int = 48000,
+    format: Optional[str] = None,
+    channels_first: bool = True,
+) -> str
+```
+
+Save audio data to file.
+
+**Parameters:**
+
+<ParamField path="audio_data" type="Union[torch.Tensor, np.ndarray]" required>
+  Audio data as torch.Tensor `[channels, samples]` or numpy.ndarray.
+</ParamField>
+
+<ParamField path="output_path" type="Union[str, Path]" required>
+  Output file path (extension can be omitted, will be added based on format).
+</ParamField>
+
+<ParamField path="sample_rate" type="int" default="48000">
+  Audio sample rate in Hz.
+</ParamField>
+
+<ParamField path="format" type="Optional[str]" default="None">
+  Audio format (`"flac"`, `"wav"`, `"mp3"`, `"wav32"`, `"opus"`, `"aac"`). Defaults to `default_format`.
+</ParamField>
+
+<ParamField path="channels_first" type="bool" default="True">
+  If `True`, tensor format is `[channels, samples]`, else `[samples, channels]`.
+</ParamField>
+
+**Returns:**
+- `str`: Actual saved file path
+
+**Example:**
+
+```python
+import torch
+from acestep.audio_utils import AudioSaver
+
+saver = AudioSaver(default_format="flac")
+audio_tensor = torch.randn(2, 48000 * 10)  # 10 seconds stereo
+
+path = saver.save_audio(
+    audio_data=audio_tensor,
+    output_path="./output/music",
+    sample_rate=48000,
+    format="flac"
+)
+print(f"Saved to: {path}")
+```
+
+### convert_audio()
+
+```python
+def convert_audio(
+    input_path: Union[str, Path],
+    output_path: Union[str, Path],
+    output_format: str,
+    remove_input: bool = False,
+) -> str
+```
+
+Convert audio from one format to another.
+
+**Parameters:**
+
+<ParamField path="input_path" type="Union[str, Path]" required>
+  Input audio file path.
+</ParamField>
+
+<ParamField path="output_path" type="Union[str, Path]" required>
+  Output audio file path.
+</ParamField>
+
+<ParamField path="output_format" type="str" required>
+  Target format (`"flac"`, `"wav"`, `"mp3"`, `"wav32"`, `"opus"`, `"aac"`).
+</ParamField>
+
+<ParamField path="remove_input" type="bool" default="False">
+  Whether to delete the input file after conversion.
+</ParamField>
+
+**Returns:**
+- `str`: Output file path
+
+**Example:**
+
+```python
+saver = AudioSaver()
+saver.convert_audio(
+    input_path="./music.flac",
+    output_path="./music.mp3",
+    output_format="mp3",
+    remove_input=False
+)
+```
+
+### save_batch()
+
+```python
+def save_batch(
+    audio_batch: Union[List[torch.Tensor], torch.Tensor],
+    output_dir: Union[str, Path],
+    file_prefix: str = "audio",
+    sample_rate: int = 48000,
+    format: Optional[str] = None,
+    channels_first: bool = True,
+) -> List[str]
+```
+
+Save multiple audio files at once.
+
+**Parameters:**
+
+<ParamField path="audio_batch" type="Union[List[torch.Tensor], torch.Tensor]" required>
+  Audio batch as `List[tensor]` or tensor `[batch, channels, samples]`.
+</ParamField>
+
+<ParamField path="output_dir" type="Union[str, Path]" required>
+  Output directory.
+</ParamField>
+
+<ParamField path="file_prefix" type="str" default="'audio'">
+  Filename prefix for saved files.
+</ParamField>
+
+<ParamField path="sample_rate" type="int" default="48000">
+  Sample rate.
+</ParamField>
+
+<ParamField path="format" type="Optional[str]" default="None">
+  Audio format.
+</ParamField>
+
+<ParamField path="channels_first" type="bool" default="True">
+  Tensor format flag.
+</ParamField>
+
+**Returns:**
+- `List[str]`: List of saved file paths
+
+**Example:**
+
+```python
+import torch
+from acestep.audio_utils import AudioSaver
+
+saver = AudioSaver()
+audio_batch = torch.randn(4, 2, 48000 * 5)  # 4 samples, stereo, 5 seconds
+
+paths = saver.save_batch(
+    audio_batch=audio_batch,
+    output_dir="./output",
+    file_prefix="track",
+    sample_rate=48000,
+    format="flac"
+)
+
+for path in paths:
+    print(f"Saved: {path}")
+```
+
+## Normalization Functions
+
+### normalize_audio()
+
+```python
+def normalize_audio(
+    audio_data: Union[torch.Tensor, np.ndarray],
+    target_db: float = -1.0
+) -> Union[torch.Tensor, np.ndarray]
+```
+
+Apply peak normalization to audio data.
+
+**Parameters:**
+
+<ParamField path="audio_data" type="Union[torch.Tensor, np.ndarray]" required>
+  Audio data as torch.Tensor or numpy.ndarray.
+</ParamField>
+
+<ParamField path="target_db" type="float" default="-1.0">
+  Target peak level in dB (e.g., `-1.0` for -1 dBFS peak).
+</ParamField>
+
+**Returns:**
+- Normalized audio data in the same format as input
+
+**Example:**
+
+```python
+import torch
+from acestep.audio_utils import normalize_audio
+
+audio = torch.randn(2, 48000)
+normalized = normalize_audio(audio, target_db=-1.0)
+
+peak = torch.max(torch.abs(normalized))
+print(f"Peak after normalization: {20 * torch.log10(peak):.2f} dB")
+```
+
+## Fade Effects
+
+### apply_fade()
+
+```python
+def apply_fade(
+    audio_data: Union[torch.Tensor, np.ndarray],
+    fade_in_samples: int = 0,
+    fade_out_samples: int = 0,
+) -> Union[torch.Tensor, np.ndarray]
+```
+
+Apply linear fade in and/or fade out to audio data.
+
+**Parameters:**
+
+<ParamField path="audio_data" type="Union[torch.Tensor, np.ndarray]" required>
+  Audio data as torch.Tensor `[channels, samples]` or numpy.ndarray.
+</ParamField>
+
+<ParamField path="fade_in_samples" type="int" default="0">
+  Number of samples for fade in ramp (`0` = no fade in).
+</ParamField>
+
+<ParamField path="fade_out_samples" type="int" default="0">
+  Number of samples for fade out ramp (`0` = no fade out).
+</ParamField>
+
+**Returns:**
+- Audio data with fades applied, in the same format as input
+
+**Example:**
+
+```python
+import torch
+from acestep.audio_utils import apply_fade
+
+audio = torch.randn(2, 48000 * 10)  # 10 seconds
+sample_rate = 48000
+
+# Apply 1 second fade in and 2 second fade out
+faded = apply_fade(
+    audio_data=audio,
+    fade_in_samples=sample_rate * 1,  # 1 second
+    fade_out_samples=sample_rate * 2  # 2 seconds
+)
+```
+
+## UUID Generation
+
+### generate_uuid_from_params()
+
+```python
+def generate_uuid_from_params(params_dict: Dict[str, Any]) -> str
+```
+
+Generate deterministic UUID from generation parameters. Same parameters always generate the same UUID.
+
+**Parameters:**
+
+<ParamField path="params_dict" type="Dict[str, Any]" required>
+  Dictionary of generation parameters.
+</ParamField>
+
+**Returns:**
+- `str`: UUID string in format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+**Example:**
+
+```python
+from acestep.audio_utils import generate_uuid_from_params
+
+params = {
+    "caption": "Epic orchestral",
+    "seed": 42,
+    "bpm": 120,
+    "duration": 30
+}
+
+uuid = generate_uuid_from_params(params)
+print(f"UUID: {uuid}")
+# Same params will always produce the same UUID
+```
+
+### generate_uuid_from_audio_data()
+
+```python
+def generate_uuid_from_audio_data(
+    audio_data: Union[torch.Tensor, np.ndarray],
+    seed: Optional[int] = None
+) -> str
+```
+
+Generate UUID from audio data (for caching/deduplication).
+
+**Parameters:**
+
+<ParamField path="audio_data" type="Union[torch.Tensor, np.ndarray]" required>
+  Audio data.
+</ParamField>
+
+<ParamField path="seed" type="Optional[int]" default="None">
+  Optional seed value to include in hash.
+</ParamField>
+
+**Returns:**
+- `str`: SHA256 hash string
+
+**Example:**
+
+```python
+import torch
+from acestep.audio_utils import generate_uuid_from_audio_data
+
+audio = torch.randn(2, 48000)
+uuid = generate_uuid_from_audio_data(audio, seed=42)
+print(f"Audio UUID: {uuid}")
+```
+
+## Helper Functions
+
+### get_lora_weights_hash()
+
+```python
+def get_lora_weights_hash(dit_handler) -> str
+```
+
+Compute an MD5 hash identifying the currently loaded LoRA adapter weights.
+
+**Parameters:**
+
+<ParamField path="dit_handler" type="AceStepHandler" required>
+  DiT handler instance with LoRA state attributes.
+</ParamField>
+
+**Returns:**
+- `str`: Hex digest string uniquely identifying the loaded LoRA weights, or empty string if no LoRA is active
+
+**Example:**
+
+```python
+from acestep.handler import AceStepHandler
+from acestep.audio_utils import get_lora_weights_hash
+
+handler = AceStepHandler()
+handler.initialize_service(model_path="acestep/ACE-Step-1.5-Turbo")
+handler.load_lora(lora_path="./lora_weights")
+
+lora_hash = get_lora_weights_hash(handler)
+print(f"LoRA weights hash: {lora_hash}")
+```
+
+### get_audio_file_hash()
+
+```python
+def get_audio_file_hash(audio_file: Union[str, Any]) -> str
+```
+
+Get hash identifier for an audio file.
+
+**Parameters:**
+
+<ParamField path="audio_file" type="Union[str, Any]" required>
+  Path to audio file (str) or file-like object.
+</ParamField>
+
+**Returns:**
+- `str`: SHA256 hash string or empty string
+
+**Example:**
+
+```python
+from acestep.audio_utils import get_audio_file_hash
+
+file_hash = get_audio_file_hash("./music.flac")
+print(f"File hash: {file_hash}")
+```
+
+## Convenience Function
+
+### save_audio()
+
+```python
+def save_audio(
+    audio_data: Union[torch.Tensor, np.ndarray],
+    output_path: Union[str, Path],
+    sample_rate: int = 48000,
+    format: Optional[str] = None,
+    channels_first: bool = True,
+) -> str
+```
+
+Convenience function to save audio using default `AudioSaver` configuration (FLAC format).
+
+**Example:**
+
+```python
+import torch
+from acestep.audio_utils import save_audio
+
+audio = torch.randn(2, 48000 * 5)  # 5 seconds stereo
+path = save_audio(audio, "./output.flac", sample_rate=48000)
+print(f"Saved: {path}")
+```

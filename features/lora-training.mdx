@@ -1,0 +1,489 @@
+---
+title: LoRA Training
+description: Fine-tune ACE-Step 1.5 with LoRA for custom styles and sounds
+---
+
+# LoRA Training
+
+LoRA (Low-Rank Adaptation) fine-tuning lets you customize ACE-Step 1.5 with your own musical style, timbre preferences, or genre specialization using just a few songs.
+
+## Overview
+
+LoRA training enables:
+
+- **Style Customization** — Train on your preferred music style
+- **Timbre Preference** — Teach the model specific sound characteristics
+- **Genre Specialization** — Improve performance on niche genres
+- **Artist Emulation** — Capture characteristics of specific artists
+- **Fast Training** — 8 songs in ~1 hour on RTX 3090
+- **Low VRAM** — Trainable on 12GB+ VRAM GPUs
+
+<Note>
+ACE-Step 1.5 supports **one-click training** in the Gradio UI, making LoRA training accessible to non-technical users.
+</Note>
+
+## Hardware Requirements
+
+| VRAM | Status | Notes |
+|------|--------|-------|
+| **12 GB** | Minimum | Works but may need to restart for VRAM freeing |
+| **16 GB** | Recommended | Generally sufficient for full songs |
+| **20 GB+** | Ideal | Handles full-length songs smoothly (~17 GB during training) |
+
+<Tip>
+During preprocessing, you may need to restart Gradio to free VRAM before training. The guide will indicate when.
+</Tip>
+
+## Training Workflow
+
+The complete LoRA training process involves:
+
+1. **Data Preparation** — Collect audio files and lyrics
+2. **Annotation** — Generate metadata (BPM, key, caption)
+3. **Preprocessing** — Convert to tensor files
+4. **Training** — Fine-tune the model
+5. **Using LoRA** — Load and generate with your custom model
+
+## Data Preparation
+
+### Required Files per Song
+
+Each training song needs:
+
+1. **Audio file** — `.mp3`, `.wav`, `.flac`, `.ogg`, or `.opus`
+2. **Lyrics** — `{filename}.lyrics.txt` (or `.txt` for backward compatibility)
+3. **Annotation** — Metadata in JSON or CSV format (optional if using auto-annotation)
+
+### Folder Structure
+
+```
+dataset/
+├── song1.mp3
+├── song1.lyrics.txt
+├── song1.json              # Optional: contains caption, bpm, key, etc.
+├── song1.caption.txt       # Optional: just caption
+├── song2.wav
+├── song2.lyrics.txt
+├── song2.json
+└── metadata.csv            # Optional: batch BPM/Key data
+```
+
+### JSON Annotation Format
+
+```json
+{
+    "caption": "High-energy J-pop with synthesizer leads and fast tempo",
+    "bpm": 190,
+    "keyscale": "D major",
+    "timesignature": "4",
+    "language": "ja"
+}
+```
+
+<Note>
+All fields are optional. Missing metadata can be auto-generated using the LM or external tools.
+</Note>
+
+## Lyrics Preparation
+
+### Lyrics File Format
+
+Save lyrics as `{filename}.lyrics.txt`:
+
+```
+[Intro]
+La la la...
+
+[Verse 1]
+Walking down the empty street
+Echoes dancing at my feet
+
+[Chorus]
+We are the stars tonight
+Shining through the endless sky
+
+[Bridge]
+Close your eyes and feel the sound
+```
+
+### Structure Tags (Recommended)
+
+Include structure tags like `[Verse]`, `[Chorus]`, `[Bridge]` to help the model learn song structure better.
+
+### Lyrics Transcription Tools
+
+If you don't have lyrics text:
+
+| Tool | Structure Tags | Accuracy | Ease of Use | Deployment |
+|------|----------------|----------|-------------|-----------|
+| [acestep-transcriber](https://huggingface.co/ACE-Step/acestep-transcriber) | No | Moderate | High difficulty | Self-hosted |
+| [Gemini](https://aistudio.google.com/) | Yes | Good | Easy | Paid API |
+| [Whisper](https://github.com/openai/whisper) | No | Good | Moderate | Self-hosted / API |
+| [ElevenLabs](https://elevenlabs.io/) | No | Good | Moderate | Paid API |
+
+Transcription scripts are provided in `scripts/lora_data_prepare/`:
+- `whisper_transcription.py`
+- `elevenlabs_transcription.py`
+- `gemini_caption.py`
+
+<Warning>
+**Always manually review and correct transcribed lyrics.** Automated transcription contains errors.
+</Warning>
+
+### Clean LRC Files
+
+If using LRC format, remove timestamps:
+
+```python
+import re
+
+def clean_lrc_content(lines):
+    """Remove timestamps from LRC file"""
+    result = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # Remove timestamps [mm:ss.x]
+        cleaned = re.sub(r"\[\d{2}:\d{2}\.\d{1,3}\]", "", line)
+        result.append(cleaned)
+    return result
+```
+
+## Automatic Annotation
+
+### Obtaining BPM and Key
+
+Use [Key-BPM-Finder](https://vocalremover.org/key-bpm-finder) to batch-analyze audio:
+
+1. Open the webpage and upload audio files
+2. Processing happens locally (no server upload)
+3. Click **Export CSV** to download results
+4. Place CSV in dataset folder
+
+CSV format:
+```csv
+File,Artist,Title,BPM,Key,Camelot
+song1.wav,,,190,D major,10B
+song2.wav,,,128,A minor,8A
+```
+
+### Obtaining Captions
+
+Captions can be generated using:
+
+1. **acestep-5Hz-lm** via Gradio Auto Label feature (see next section)
+2. **Gemini API** via `scripts/lora_data_prepare/gemini_caption.py`
+
+Gemini script generates:
+- `{filename}.lyrics.txt` — Transcribed lyrics
+- `{filename}.caption.txt` — Music description
+
+## One-Click Training in Gradio
+
+### Step 1: Launch Gradio
+
+Disable service pre-initialization for training:
+
+**Windows** (`start_gradio_ui.bat`):
+```batch
+if not defined INIT_SERVICE set INIT_SERVICE=--init_service false
+```
+
+**Linux/macOS** (`start_gradio_ui.sh`):
+```bash
+: "${INIT_SERVICE:=--init_service false}"
+```
+
+Then launch:
+```bash
+# Windows
+start_gradio_ui.bat
+
+# Linux/macOS
+./start_gradio_ui.sh
+```
+
+### Step 2: Load Models
+
+**If using LM for caption generation:**
+Select LM model during initialization (0.6B / 1.7B / 4B)
+
+**If not using LM:**
+Don't select any LM model
+
+### Step 3: Load Dataset
+
+1. Switch to **LoRA Training** tab
+2. Enter dataset directory path
+3. Click **Scan**
+
+The scanner recognizes:
+- Audio files (`.mp3`, `.wav`, `.flac`, etc.)
+- Lyrics (`.lyrics.txt` or `.txt`)
+- Captions (`.caption.txt`)
+- Metadata (`.json` files)
+- Batch annotations (`.csv` files)
+
+### Step 4: Review Dataset
+
+Check the dataset preview:
+
+- **Duration** — Auto-read from audio
+- **Lyrics** — From `.lyrics.txt` file
+- **Labeled** — ✅ if caption exists, ❌ otherwise
+- **BPM / Key / Caption** — From JSON or CSV
+
+Configuration:
+- Uncheck **All Instrumental** if dataset has vocals
+- **Custom Trigger Tag** — Optional tag for your LoRA (limited effect)
+- **Genre Ratio** — Keep at 0 (current genre descriptions are less useful than captions)
+
+### Step 5: Auto Label Data
+
+If missing captions, use LM to generate them:
+
+1. Ensure BPM/Key are filled (use Key-BPM-Finder first)
+2. Click **Auto Label**
+3. LM generates captions for unlabeled songs
+
+<Note>
+Skip this if you already have captions. LM caption generation requires BPM/Key to avoid hallucinations.
+</Note>
+
+### Step 6: Review and Edit
+
+Manually review each entry:
+
+1. Select song from list
+2. Edit caption, lyrics, metadata
+3. Click **Save** after each edit
+
+### Step 7: Save Dataset
+
+Enter save path and click **Save Dataset** to export JSON.
+
+### Step 8: Preprocess
+
+<Warning>
+If you used LM for captions and VRAM is low, **restart Gradio** now. When restarting, **don't select the LM model**. Then load the saved JSON file.
+</Warning>
+
+1. Enter save path for tensor files
+2. Click **Start Preprocessing**
+3. Wait for completion
+
+### Step 9: Train LoRA
+
+<Note>
+Recommended: **Restart Gradio** after preprocessing to free VRAM.
+</Note>
+
+1. Switch to **Train LoRA** tab
+2. Load tensor files from preprocessing
+3. Configure training parameters (or use defaults)
+4. Click **Start Training**
+
+### Training Parameters
+
+| Parameter | Description | Suggested Value |
+|-----------|-------------|----------------|
+| **Max Epochs** | Training iterations | ~100 songs: 500 epochs<br/>10-20 songs: 800 epochs |
+| **Batch Size** | Samples per step | 1 (default)<br/>2-4 if VRAM allows |
+| **Save Every N Epochs** | Checkpoint interval | Smaller for fewer epochs<br/>Larger for more epochs |
+
+<Note>
+Values are for reference only. Adjust based on your dataset and GPU.
+</Note>
+
+### LoKr Alternative (Faster Training)
+
+LoKr training is **10x faster** than LoRA:
+
+- What took 1 hour now takes ~5 minutes
+- Use **Train LoKr** tab in Gradio
+- Or use [Side-Step](https://github.com/koda-dernet/Side-Step) CLI toolkit
+
+See [Side-Step Training Guide](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/Training%20Guide.md) for details.
+
+## Using Your Trained LoRA
+
+### Step 1: Restart Gradio
+
+After training completes, restart Gradio (don't select LM model).
+
+### Step 2: Load LoRA Weights
+
+Once model is initialized, load your trained LoRA in the generation interface.
+
+### Step 3: Generate Music
+
+Generate music as usual. The model now uses your custom LoRA:
+
+```python
+params = GenerationParams(
+    caption="Your style-specific prompt",
+    lyrics="[Verse 1]\nLyrics here",
+)
+
+# LoRA is automatically applied if loaded in handler
+result = generate_music(dit_handler, llm_handler, params, config)
+```
+
+<Tip>
+Your LoRA will influence generation towards the style/characteristics of your training data.
+</Tip>
+
+## Training Best Practices
+
+### 1. Dataset Quality
+
+**Audio Quality:**
+- Use high-quality source files (preferably lossless)
+- Consistent production quality across dataset
+- Clear, well-mixed audio
+
+**Lyrics Accuracy:**
+- Manually review all transcribed lyrics
+- Include structure tags for better learning
+- Ensure lyrics match audio
+
+**Caption Consistency:**
+- Use similar description style across dataset
+- Include key characteristics (genre, instruments, mood)
+- Be specific about timbre and production style
+
+### 2. Dataset Size
+
+| Dataset Size | Epochs | Training Time (3090) | Use Case |
+|--------------|--------|---------------------|----------|
+| **5-10 songs** | 800-1000 | ~30-60 min | Style prototype, testing |
+| **10-20 songs** | 600-800 | ~1-2 hours | Good style learning |
+| **20-50 songs** | 500-600 | ~2-5 hours | Strong style model |
+| **50+ songs** | 300-500 | 5+ hours | Professional fine-tuning |
+
+### 3. Training Focus
+
+Choose training data based on your goal:
+
+- **Genre specialization**: 20+ songs from target genre
+- **Artist style**: 10-20 songs from specific artist
+- **Timbre preference**: Songs with similar production/mixing
+- **Language focus**: Songs in target language
+- **Mood/atmosphere**: Songs with consistent emotional tone
+
+### 4. Overfitting Prevention
+
+Avoid overfitting:
+- Don't train too many epochs on small datasets
+- Include variety within your target style
+- Test generation periodically during training
+- Save checkpoints to compare different epochs
+
+## Advanced Training with Side-Step
+
+For advanced users, [Side-Step](https://github.com/koda-dernet/Side-Step) provides:
+
+- **CLI-based training workflows**
+- **Corrected timestep sampling**
+- **LoKR adapters** (faster training)
+- **VRAM optimization**
+- **Gradient sensitivity analysis**
+- **Detailed configuration control**
+
+### Side-Step Documentation
+
+| Topic | Description |
+|-------|-------------|
+| [Getting Started](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/Getting%20Started.md) | Installation and setup |
+| [End-to-End Tutorial](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/End-to-End%20Tutorial.md) | Complete walkthrough |
+| [Dataset Preparation](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/Dataset%20Preparation.md) | JSON schema and formats |
+| [Training Guide](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/Training%20Guide.md) | LoRA vs LoKR, hyperparameters |
+| [Using Your Adapter](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/Using%20Your%20Adapter.md) | Loading in Gradio |
+| [VRAM Optimization](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/VRAM%20Optimization%20Guide.md) | Memory optimization |
+| [Estimation Guide](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/Estimation%20Guide.md) | Gradient sensitivity analysis |
+| [Shift and Timestep Sampling](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/sidestep/Shift%20and%20Timestep%20Sampling.md) | Training timesteps |
+
+## Example Training Workflow
+
+Complete example from start to finish:
+
+```python
+# 1. Prepare dataset folder
+import os
+os.makedirs("my_training_data", exist_ok=True)
+
+# 2. Copy audio files and create lyrics
+# my_training_data/
+#   song1.mp3
+#   song1.lyrics.txt
+#   song2.mp3
+#   song2.lyrics.txt
+#   ...
+
+# 3. Get BPM/Key annotations
+# Use Key-BPM-Finder online tool
+# Download CSV to my_training_data/
+
+# 4. Generate captions (if needed)
+# Use Gradio Auto Label or gemini_caption.py
+
+# 5. Launch Gradio and follow one-click workflow
+# - Load dataset
+# - Review and edit
+# - Save dataset JSON
+# - Preprocess to tensors
+# - Train LoRA
+
+# 6. Use trained LoRA
+# - Restart Gradio
+# - Load LoRA weights
+# - Generate music with custom style
+```
+
+## Troubleshooting
+
+### Issue: Out of Memory During Preprocessing
+
+**Solution:**
+- Restart Gradio to free VRAM
+- Don't load LM model if not needed
+- Process in smaller batches
+
+### Issue: Out of Memory During Training
+
+**Solution:**
+- Reduce batch_size to 1
+- Close other GPU applications
+- Use shorter audio clips (trim to 2-3 minutes)
+- Try LoKr training (uses less memory)
+
+### Issue: LoRA Not Affecting Generation
+
+**Solution:**
+- Ensure LoRA is properly loaded
+- Check lora_scale (increase to 1.0 or higher)
+- Train for more epochs
+- Increase dataset size or consistency
+
+### Issue: LoRA Overfitting
+
+**Solution:**
+- Reduce number of epochs
+- Increase dataset variety
+- Lower lora_scale when generating
+- Train with more diverse samples
+
+## Related Features
+
+- [Text-to-Music Generation](/features/text-to-music) — Use your LoRA for generation
+- [Cover Generation](/features/cover-generation) — Apply custom style to covers
+- [Audio Editing](/features/audio-editing) — Edit with LoRA characteristics
+
+## API Reference
+
+For programmatic LoRA loading and use:
+
+- Python API: `/home/daytona/workspace/source/docs/en/INFERENCE.md`
+- Training Tutorial: `/home/daytona/workspace/source/docs/en/LoRA_Training_Tutorial.md`
+- Gradio UI: `/home/daytona/workspace/source/docs/en/GRADIO_GUIDE.md`

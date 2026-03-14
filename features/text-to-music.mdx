@@ -1,0 +1,333 @@
+---
+title: Text-to-Music Generation
+description: Generate original music from text prompts using ACE-Step 1.5
+---
+
+# Text-to-Music Generation
+
+Text-to-music is the foundational generation mode in ACE-Step 1.5, allowing you to create original music compositions from natural language descriptions.
+
+## Overview
+
+The text-to-music workflow uses a hybrid architecture where:
+
+1. **5Hz Language Model (LM)** acts as a planner, understanding your intent and generating:
+   - Music metadata (BPM, key, duration)
+   - Optimized caption and structure
+   - Semantic codes containing composition and orchestration information
+
+2. **Diffusion Transformer (DiT)** acts as an executor, transforming semantic codes into high-fidelity audio
+
+<Note>
+The LM is optional. You can disable `thinking` mode to skip LM planning and use DiT directly with your own specifications.
+</Note>
+
+## Basic Text-to-Music Workflow
+
+### 1. Caption Input
+
+**Caption is the most important factor affecting generated music.** It describes the overall musical elements:
+
+```python
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+
+params = GenerationParams(
+    task_type="text2music",
+    caption="Upbeat electronic pop with synth leads, 808 drums, energetic female vocals, modern production",
+    lyrics="[Verse 1]\nDancing through the night\nUnder neon lights\n\n[Chorus]\nWe are alive tonight\nShining so bright",
+    thinking=True,  # Enable LM for planning
+)
+
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="flac"
+)
+
+result = generate_music(dit_handler, llm_handler, params, config)
+```
+
+### Caption Writing Dimensions
+
+| Dimension | Examples |
+|-----------|----------|
+| **Style/Genre** | pop, rock, jazz, electronic, hip-hop, R&B, folk, classical, lo-fi, synthwave |
+| **Emotion/Atmosphere** | melancholic, uplifting, energetic, dreamy, dark, nostalgic, euphoric, intimate |
+| **Instruments** | acoustic guitar, piano, synth pads, 808 drums, strings, brass, electric bass |
+| **Timbre Texture** | warm, bright, crisp, muddy, airy, punchy, lush, raw, polished |
+| **Vocal Characteristics** | female vocal, male vocal, breathy, powerful, falsetto, raspy, choir |
+| **Production Style** | lo-fi, high-fidelity, live recording, studio-polished, bedroom pop |
+
+### Caption Writing Best Practices
+
+1. **Be Specific** — "sad piano ballad with female breathy vocal" beats "a sad song"
+2. **Combine Multiple Dimensions** — Mix style + emotion + instruments + timbre
+3. **Use Texture Words** — Adjectives like warm, crisp, airy, punchy influence mixing
+4. **Avoid Conflicts** — Don't mix incompatible styles (e.g., "classical strings" + "hardcore metal")
+5. **Control Granularity** — More detail = more control, less detail = more creative freedom
+
+<Tip>
+You can use the **Random Dice** button in the Gradio UI to see example captions and learn the writing style.
+</Tip>
+
+## Lyrics Input
+
+**Lyrics is the temporal script** that controls how music unfolds over time. It carries:
+
+- Lyric text content
+- Structure tags (`[Verse]`, `[Chorus]`, `[Bridge]`)
+- Vocal style hints (`[raspy vocal]`, `[whispered]`)
+- Instrumental sections (`[guitar solo]`, `[drum break]`)
+- Energy changes (`[building energy]`, `[explosive drop]`)
+
+### Structure Tags
+
+| Category | Tag | Description |
+|----------|-----|-------------|
+| **Basic Structure** | `[Intro]` | Opening, establish atmosphere |
+| | `[Verse]` / `[Verse 1]` | Verse, narrative progression |
+| | `[Pre-Chorus]` | Pre-chorus, build energy |
+| | `[Chorus]` | Chorus, emotional climax |
+| | `[Bridge]` | Bridge, transition or elevation |
+| | `[Outro]` | Ending, conclusion |
+| **Dynamic Sections** | `[Build]` | Energy gradually rising |
+| | `[Drop]` | Electronic music energy release |
+| | `[Breakdown]` | Reduced instrumentation, space |
+| **Instrumental Sections** | `[Instrumental]` | Pure instrumental, no vocals |
+| | `[Guitar Solo]` | Guitar solo |
+| | `[Piano Interlude]` | Piano interlude |
+
+### Combining Tags
+
+You can combine tags with `-` for finer control:
+
+```
+[Chorus - anthemic]
+We are the champions tonight
+Rising to the top
+
+[Bridge - whispered]
+In the silence we find our truth
+```
+
+<Warning>
+Don't stack too many tags. Keep it simple: `[Chorus - anthemic]` not `[Chorus - anthemic - powerful - epic - high energy]`
+</Warning>
+
+### Lyrics Best Practices
+
+1. **Control Syllable Count** — 6-10 syllables per line works best
+2. **Keep Consistency** — Match Caption and Lyrics descriptions (no conflicts)
+3. **Use Case for Intensity** — UPPERCASE indicates stronger vocal intensity
+4. **Background Vocals** — Use parentheses: `We rise together (together)`
+5. **Clear Section Separation** — Separate sections with blank lines
+
+### Instrumental Music
+
+For pure instrumental music:
+
+```python
+params = GenerationParams(
+    caption="Ambient piano with soft strings, meditative atmosphere",
+    lyrics="[Instrumental]",
+    instrumental=True,
+)
+```
+
+## Metadata Control
+
+### Music Metadata Parameters
+
+When `thinking=True` and `use_cot_metas=True`, the LM automatically infers metadata. You can also manually specify:
+
+| Parameter | Range | Description |
+|-----------|-------|-------------|
+| `bpm` | 30–300 | Tempo (60-80: slow, 90-120: mid-tempo, 130-180: fast) |
+| `keyscale` | Any key | e.g., "C Major", "Am", "F# Minor" |
+| `timesignature` | 2/3/4/6 | "4" for 4/4, "3" for 3/4, "6" for 6/8 |
+| `vocal_language` | Language code | "en", "zh", "ja", "es", etc. |
+| `duration` | 10–600 | Target duration in seconds |
+
+<Note>
+Metadata acts as **guidance**, not precise commands. The model samples from distributions around these values.
+</Note>
+
+### When to Manually Set Metadata
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Daily generation | Let LM auto-infer (use_cot_metas=True) |
+| Specific tempo requirement | Manually set `bpm` |
+| Waltz or specific style | Manually set `timesignature=3` |
+| Need to match other material | Set `bpm` and `duration` |
+| Specific key color | Manually set `keyscale` |
+
+<Tip>
+Don't write metadata like "120 BPM" or "C Major" in the caption. Use dedicated metadata parameters instead.
+</Tip>
+
+## Language Model Query Rewriting
+
+The 5Hz LM can enhance your prompts through Chain-of-Thought reasoning:
+
+### CoT Features
+
+```python
+params = GenerationParams(
+    caption="upbeat pop song",
+    lyrics="[Verse]\nSimple lyrics here",
+    thinking=True,  # Enable LM
+    use_cot_metas=True,     # Auto-infer BPM, key, duration
+    use_cot_caption=True,   # Enhance caption with details
+    use_cot_language=True,  # Auto-detect vocal language
+)
+```
+
+**What CoT Does:**
+
+- **use_cot_metas**: LM infers missing metadata (BPM, key, time signature, duration)
+- **use_cot_caption**: LM expands simple captions into detailed descriptions
+- **use_cot_language**: LM detects the language from lyrics
+
+### LM Sampling Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `lm_temperature` | 0.85 | Higher = more creative/random (0.0–2.0) |
+| `lm_cfg_scale` | 2.0 | Higher = more prompt adherence |
+| `lm_top_k` | 0 | Top-K sampling (0 = disabled) |
+| `lm_top_p` | 0.9 | Nucleus sampling (limits cumulative probability) |
+| `lm_negative_prompt` | "NO USER INPUT" | What LM should avoid |
+
+## Language Support
+
+ACE-Step 1.5 supports **50+ languages** for lyrics and vocals:
+
+- **Common Languages**: English (en), Chinese (zh), Japanese (ja), Korean (ko), Spanish (es), French (fr), German (de), Italian (it), Portuguese (pt), Russian (ru)
+- **South Asian**: Hindi (hi), Bengali (bn), Tamil (ta), Telugu (te), Urdu (ur)
+- **Southeast Asian**: Thai (th), Vietnamese (vi), Indonesian (id), Filipino (fil)
+- **And many more...**
+
+The model can generate lyrics and vocals in the specified language. Language is auto-detected when `use_cot_language=True`.
+
+## Simple Mode (Inspiration Mode)
+
+For quick starts, use Simple Mode where you describe music in natural language:
+
+```python
+from acestep.inference import create_sample
+
+result = create_sample(
+    llm_handler,
+    query="A soft Bengali love song for a quiet evening with acoustic guitar",
+    instrumental=False,
+    vocal_language="bn",  # Constrain to Bengali
+)
+
+if result.success:
+    print(f"Caption: {result.caption}")
+    print(f"Lyrics: {result.lyrics}")
+    print(f"BPM: {result.bpm}")
+    print(f"Key: {result.keyscale}")
+```
+
+Simple Mode generates complete samples including caption, lyrics, and metadata from a single query.
+
+## Generation Examples
+
+### Example 1: Electronic Pop
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="Upbeat synthwave with 80s-style synth leads, driving 808 drums, energetic female vocals, retro production",
+    lyrics="[Intro]\nOh oh oh\n\n[Verse 1]\nNeon lights guide my way\nThrough the city at night\n\n[Chorus]\nWe're electric tonight\nShining bright in the dark\nDancing until daylight",
+    bpm=128,
+    keyscale="D minor",
+    duration=180,
+    thinking=True,
+)
+```
+
+### Example 2: Acoustic Ballad
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="Intimate acoustic ballad with fingerpicked guitar, soft strings, warm female vocal, melancholic atmosphere",
+    lyrics="[Intro - ambient]\n\n[Verse 1]\nMoonlight falls on empty streets\nI'm walking alone tonight\n\n[Chorus - powerful belting]\nWhere did you go\nI'm still here waiting\nIn the shadows of our memories",
+    bpm=72,
+    keyscale="G Major",
+    thinking=True,
+)
+```
+
+### Example 3: Instrumental Jazz
+
+```python
+params = GenerationParams(
+    task_type="text2music",
+    caption="Smooth jazz with saxophone lead, walking bass, brush drums, piano comping, late-night lounge atmosphere",
+    lyrics="[Intro]\n\n[Saxophone Solo - expressive]\n\n[Piano Interlude]\n\n[Outro - fade out]",
+    instrumental=True,
+    bpm=90,
+    duration=240,
+)
+```
+
+## Tips for Best Results
+
+### 1. Iterate and Refine
+
+Text-to-music is human-centered, not one-click generation:
+
+1. Start with a simple prompt
+2. Generate multiple versions (batch_size=4 or 8)
+3. Pick the best direction
+4. Refine with more specific prompts
+5. Use Cover or Repaint modes for further editing
+
+### 2. Use Batch Generation + Scoring
+
+ACE-Step 1.5 is extremely fast, enabling exploration:
+
+```python
+config = GenerationConfig(
+    batch_size=8,  # Generate 8 versions at once
+    use_random_seed=True,  # Each gets different seed
+)
+```
+
+Enable AutoGen in the Gradio UI to continuously generate new batches in the background while you review results.
+
+### 3. Fixed Seed for Parameter Tuning
+
+When experimenting with parameters, fix the seed to isolate parameter effects:
+
+```python
+config = GenerationConfig(
+    batch_size=1,
+    use_random_seed=False,
+    seeds=[12345],  # Fixed seed
+)
+```
+
+### 4. Balance Detail and Freedom
+
+- **Want surprises?** Write less detailed captions
+- **Want control?** Add more specific details
+- **Want consistency?** Ensure Caption and Lyrics match
+
+## Related Features
+
+- [Cover Generation](/features/cover-generation) — Use reference audio for style transfer
+- [Audio Editing](/features/audio-editing) — Repaint specific sections
+- [Multi-track Generation](/features/multi-track) — Layer multiple tracks
+- [LoRA Training](/features/lora-training) — Train custom models for your style
+
+## API Reference
+
+For programmatic access, see:
+
+- Python API: `/home/daytona/workspace/source/docs/en/INFERENCE.md`
+- REST API: `/home/daytona/workspace/source/docs/en/API.md`
+- Gradio UI: `/home/daytona/workspace/source/docs/en/GRADIO_GUIDE.md`

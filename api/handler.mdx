@@ -1,0 +1,377 @@
+---
+title: AceStepHandler
+description: Main handler class for ACE-Step music generation
+---
+
+`AceStepHandler` is the central handler class that manages model initialization, LoRA adapters, and music generation workflows.
+
+## Constructor
+
+```python
+from acestep.handler import AceStepHandler
+
+handler = AceStepHandler()
+```
+
+Creates a new handler instance with default state. Models must be initialized separately using `initialize_service()`.
+
+## Initialization
+
+### initialize_service()
+
+```python
+def initialize_service(
+    model_path: str,
+    device: Optional[str] = None,
+    dtype: Optional[torch.dtype] = None,
+    offload_to_cpu: bool = False,
+    offload_dit_to_cpu: bool = False,
+    compile_model: bool = False,
+    custom_layers_config: Optional[Dict] = None,
+    quantization: Optional[str] = None,
+    use_mlx_dit: bool = False,
+    use_mlx_vae: bool = False,
+    **kwargs
+) -> None
+```
+
+Initialize the ACE-Step model and all required components.
+
+**Parameters:**
+
+<ParamField path="model_path" type="str" required>
+  Path to the ACE-Step model directory or Hugging Face model ID.
+</ParamField>
+
+<ParamField path="device" type="Optional[str]" default="None">
+  Device to run the model on (`"cuda"`, `"mps"`, `"cpu"`, etc.). Auto-detected if `None`.
+</ParamField>
+
+<ParamField path="dtype" type="Optional[torch.dtype]" default="None">
+  Data type for model parameters. Auto-selected if `None` (e.g., `torch.float16` for CUDA).
+</ParamField>
+
+<ParamField path="offload_to_cpu" type="bool" default="False">
+  Enable CPU offloading for VAE and text encoder to save GPU memory.
+</ParamField>
+
+<ParamField path="offload_dit_to_cpu" type="bool" default="False">
+  Enable CPU offloading for DiT model layers.
+</ParamField>
+
+<ParamField path="compile_model" type="bool" default="False">
+  Compile the model using `torch.compile()` for faster inference (PyTorch 2.0+).
+</ParamField>
+
+<ParamField path="custom_layers_config" type="Optional[Dict]" default="None">
+  Custom layer offloading configuration for advanced memory management.
+</ParamField>
+
+<ParamField path="quantization" type="Optional[str]" default="None">
+  Quantization mode. Options: `"int8_weight_only"`, `"fp8_weight_only"`, `"w8a8_dynamic"`, or `None` (no quantization).
+</ParamField>
+
+<ParamField path="use_mlx_dit" type="bool" default="False">
+  Use MLX acceleration for DiT on Apple Silicon (macOS only).
+</ParamField>
+
+<ParamField path="use_mlx_vae" type="bool" default="False">
+  Use MLX acceleration for VAE on Apple Silicon (macOS only).
+</ParamField>
+
+**Example:**
+
+```python
+from acestep.handler import AceStepHandler
+import torch
+
+handler = AceStepHandler()
+handler.initialize_service(
+    model_path="acestep/ACE-Step-1.5-Turbo",
+    device="cuda",
+    dtype=torch.float16,
+    compile_model=True
+)
+```
+
+## Music Generation
+
+### generate_music()
+
+```python
+def generate_music(
+    captions: Union[str, List[str]],
+    global_caption: str = "",
+    lyrics: Union[str, List[str]] = "",
+    bpm: Optional[int] = None,
+    key_scale: str = "",
+    time_signature: str = "",
+    vocal_language: str = "unknown",
+    inference_steps: int = 8,
+    guidance_scale: float = 7.0,
+    use_random_seed: bool = True,
+    seed: Union[str, int, List[int]] = "",
+    reference_audio: Optional[str] = None,
+    audio_duration: Optional[float] = None,
+    batch_size: int = 1,
+    src_audio: Optional[str] = None,
+    audio_code_string: Union[str, List[str]] = "",
+    repainting_start: float = 0.0,
+    repainting_end: float = -1,
+    instruction: str = "Fill the audio semantic mask based on the given conditions:",
+    audio_cover_strength: float = 1.0,
+    cover_noise_strength: float = 0.0,
+    task_type: str = "text2music",
+    use_adg: bool = False,
+    cfg_interval_start: float = 0.0,
+    cfg_interval_end: float = 1.0,
+    shift: float = 1.0,
+    infer_method: str = "ode",
+    timesteps: Optional[List[float]] = None,
+    latent_shift: float = 0.0,
+    latent_rescale: float = 1.0,
+    chunk_mask_mode: str = "auto",
+    progress=None,
+) -> Dict[str, Any]
+```
+
+Generate music using the initialized model.
+
+**Parameters:**
+
+<ParamField path="captions" type="Union[str, List[str]]" required>
+  Text description(s) of the music to generate.
+</ParamField>
+
+<ParamField path="lyrics" type="Union[str, List[str]]" default="''">
+  Lyrics for the music. Use `"[Instrumental]"` for instrumental tracks.
+</ParamField>
+
+<ParamField path="bpm" type="Optional[int]" default="None">
+  Target BPM (beats per minute). `None` for auto-detection.
+</ParamField>
+
+<ParamField path="inference_steps" type="int" default="8">
+  Number of diffusion steps. Use 8 for turbo models, 32-100 for base models.
+</ParamField>
+
+<ParamField path="guidance_scale" type="float" default="7.0">
+  CFG strength (classifier-free guidance). Higher values follow the prompt more strictly.
+</ParamField>
+
+<ParamField path="seed" type="Union[str, int, List[int]]" default="''">
+  Random seed(s) for reproducibility. Empty string or `-1` for random.
+</ParamField>
+
+<ParamField path="batch_size" type="int" default="1">
+  Number of audio samples to generate.
+</ParamField>
+
+<ParamField path="audio_duration" type="Optional[float]" default="None">
+  Target duration in seconds. `None` for model default.
+</ParamField>
+
+<ParamField path="task_type" type="str" default="'text2music'">
+  Task type: `"text2music"`, `"cover"`, `"repaint"`, `"lego"`, `"extract"`, or `"complete"`.
+</ParamField>
+
+**Returns:**
+
+Dictionary with:
+- `"success"` (bool): Whether generation succeeded
+- `"audios"` (List[Dict]): List of audio dictionaries with `"tensor"`, `"sample_rate"`, and metadata
+- `"status_message"` (str): Status message
+- `"extra_outputs"` (Dict): Additional outputs (latents, time costs, etc.)
+- `"error"` (Optional[str]): Error message if failed
+
+**Example:**
+
+```python
+result = handler.generate_music(
+    captions="Peaceful piano melody with soft strings",
+    lyrics="[Instrumental]",
+    bpm=80,
+    audio_duration=30,
+    inference_steps=8,
+    seed=42,
+    batch_size=2
+)
+
+if result["success"]:
+    for audio in result["audios"]:
+        tensor = audio["tensor"]  # torch.Tensor [channels, samples]
+        sample_rate = audio["sample_rate"]  # 48000
+        print(f"Generated audio: {tensor.shape}")
+```
+
+## LoRA Management
+
+### load_lora()
+
+```python
+def load_lora(
+    lora_path: str,
+    adapter_name: str = "default",
+    lora_scale: float = 1.0
+) -> None
+```
+
+Load a LoRA adapter for fine-tuned model control.
+
+**Parameters:**
+
+<ParamField path="lora_path" type="str" required>
+  Path to LoRA weights directory or file.
+</ParamField>
+
+<ParamField path="adapter_name" type="str" default="'default'">
+  Name to identify this adapter.
+</ParamField>
+
+<ParamField path="lora_scale" type="float" default="1.0">
+  Scale factor for LoRA influence (0.0-1.0).
+</ParamField>
+
+**Example:**
+
+```python
+handler.load_lora(
+    lora_path="./lora_weights",
+    adapter_name="jazz_style",
+    lora_scale=0.8
+)
+```
+
+### unload_lora()
+
+```python
+def unload_lora() -> None
+```
+
+Remove all loaded LoRA adapters and restore base model.
+
+**Example:**
+
+```python
+handler.unload_lora()
+```
+
+### set_lora_scale()
+
+```python
+def set_lora_scale(scale: float, adapter_name: Optional[str] = None) -> None
+```
+
+Adjust LoRA influence scale.
+
+**Parameters:**
+
+<ParamField path="scale" type="float" required>
+  New scale factor (0.0-1.0).
+</ParamField>
+
+<ParamField path="adapter_name" type="Optional[str]" default="None">
+  Adapter to adjust. `None` adjusts active adapter.
+</ParamField>
+
+**Example:**
+
+```python
+handler.set_lora_scale(0.5)  # Reduce LoRA influence to 50%
+```
+
+## State Properties
+
+### model
+
+The loaded DiT (Diffusion Transformer) model.
+
+### vae
+
+The VAE (Variational AutoEncoder) for audio encoding/decoding.
+
+### text_encoder
+
+Text encoder model for caption/lyrics embedding.
+
+### text_tokenizer
+
+Tokenizer for text encoder.
+
+### device
+
+Current computation device (`"cuda"`, `"mps"`, `"cpu"`, etc.).
+
+### dtype
+
+Current model dtype (`torch.float16`, `torch.float32`, etc.).
+
+### lora_loaded
+
+Boolean indicating if any LoRA adapter is loaded.
+
+### use_lora
+
+Boolean indicating if LoRA is currently active.
+
+### lora_scale
+
+Current LoRA scale factor (0.0-1.0).
+
+### quantization
+
+Current quantization mode (`"int8_weight_only"`, `"fp8_weight_only"`, `"w8a8_dynamic"`, or `None`).
+
+## Complete Usage Example
+
+```python
+from acestep.handler import AceStepHandler
+from acestep.inference import GenerationParams, GenerationConfig, generate_music
+import torch
+
+# Initialize handler
+handler = AceStepHandler()
+handler.initialize_service(
+    model_path="acestep/ACE-Step-1.5-Turbo",
+    device="cuda",
+    dtype=torch.float16,
+    compile_model=True
+)
+
+# Optional: Load LoRA for style control
+handler.load_lora(
+    lora_path="./my_lora_weights",
+    adapter_name="custom_style",
+    lora_scale=0.7
+)
+
+# Create generation parameters
+params = GenerationParams(
+    caption="Epic orchestral cinematic music",
+    lyrics="[Instrumental]",
+    bpm=120,
+    duration=30,
+    inference_steps=8,
+    seed=42
+)
+
+config = GenerationConfig(
+    batch_size=2,
+    audio_format="flac"
+)
+
+# Generate music using high-level API
+result = generate_music(
+    dit_handler=handler,
+    llm_handler=None,  # LLM optional
+    params=params,
+    config=config,
+    save_dir="./output"
+)
+
+if result.success:
+    for audio in result.audios:
+        print(f"Saved: {audio['path']}")
+else:
+    print(f"Error: {result.error}")
+```
