@@ -1,0 +1,112 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "ACE-Step 1.5",
+  "projectDescription": "Open-source music generation model that runs locally with commercial-grade quality, supporting text-to-music, cover generation, and LoRA training.",
+  "theme": "aspen",
+  "primaryColor": "#7c7c7c",
+  "lightColor": "#b6b6b6",
+  "darkColor": "#111111",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/models",
+              "concepts/generation-process",
+              "concepts/gpu-compatibility"
+            ]
+          },
+          {
+            "group": "Usage Guides",
+            "pages": [
+              "guides/gradio-ui",
+              "guides/rest-api",
+              "guides/python-api",
+              "guides/cli"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/text-to-music",
+              "features/cover-generation",
+              "features/audio-editing",
+              "features/multi-track",
+              "features/lora-training"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/generation-parameters",
+              "advanced/llm-configuration",
+              "advanced/benchmark",
+              "advanced/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Python API",
+            "pages": [
+              "api/generation-params",
+              "api/generation-config",
+              "api/handler",
+              "api/audio-utils"
+            ]
+          },
+          {
+            "group": "REST API",
+            "pages": [
+              "api/rest/overview",
+              "api/rest/endpoints",
+              "api/rest/models"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Ultra-fast local music generation (under 2s on A100, under 10s on RTX 3090)",
+    "Commercial-grade quality comparable to Suno v4.5-v5",
+    "Multi-platform support (CUDA, ROCm, Intel XPU, MPS, CPU)",
+    "Flexible duration (10 seconds to 10 minutes)",
+    "Cover generation and audio editing (repaint, multi-track)",
+    "LoRA training for personalized music styles",
+    "Multiple interfaces (Gradio UI, REST API, Python API, CLI)",
+    "50+ language support for lyrics",
+    "Chain-of-Thought reasoning with 5Hz Language Model"
+  ],
+  "publicApiSurface": [
+    "acestep.inference.generate_music",
+    "acestep.inference.GenerationParams",
+    "acestep.inference.GenerationConfig",
+    "acestep.handler.AceStepHandler",
+    "acestep.llm_inference.LLMHandler",
+    "POST /release_task",
+    "POST /query_result",
+    "POST /create_random_sample",
+    "POST /format_input",
+    "GET /v1/models",
+    "GET /v1/audio",
+    "CLI: acestep",
+    "CLI: acestep-api",
+    "CLI: acestep-download"
+  ]
+}
